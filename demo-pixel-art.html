@@ -1,0 +1,926 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Art Studio — Apex AI</title>
+<style>
+/* ===== RESET & BASE ===== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0a0a1a;
+  --surface:#12122a;
+  --surface2:#1a1a3e;
+  --border:#2a2a5a;
+  --text:#e0e0ff;
+  --muted:#7a7aaa;
+  --accent:#00e5ff;
+  --accent2:#ff00e5;
+  --accent3:#39ff14;
+  --danger:#ff3366;
+  --grid-line:rgba(0,229,255,0.15);
+  --grid-line-bright:rgba(0,229,255,0.35);
+  --cell-hover:rgba(0,229,255,0.2);
+  --radius:8px;
+  --radius-sm:4px;
+}
+html{height:100%}
+body{
+  min-height:100vh;
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  display:flex;flex-direction:column;
+  overflow-x:hidden;
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(0,229,255,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse at 80% 50%, rgba(255,0,229,0.04) 0%, transparent 50%);
+}
+
+/* ===== HEADER ===== */
+.header{
+  padding:16px 24px;
+  display:flex;align-items:center;justify-content:space-between;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+  flex-shrink:0;
+}
+.header-left{display:flex;align-items:center;gap:14px}
+.logo{
+  font-size:24px;font-weight:900;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  letter-spacing:1px;
+  text-shadow:none;
+}
+.logo-sub{font-size:11px;color:var(--muted);letter-spacing:2px;text-transform:uppercase}
+.header-right{display:flex;align-items:center;gap:10px}
+
+/* ===== TOOLBAR ===== */
+.toolbar{
+  display:flex;align-items:center;gap:8px;
+  padding:12px 24px;
+  background:var(--surface);
+  border-bottom:1px solid var(--border);
+  flex-wrap:wrap;
+  flex-shrink:0;
+}
+.tool-group{
+  display:flex;align-items:center;gap:4px;
+  padding:4px 8px;
+  border-radius:var(--radius);
+  background:var(--surface2);
+  border:1px solid var(--border);
+}
+.tool-group-label{
+  font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:1px;
+  margin-right:4px;white-space:nowrap;
+}
+.tool-btn{
+  width:36px;height:36px;
+  display:flex;align-items:center;justify-content:center;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  cursor:pointer;
+  font-size:18px;
+  transition:all .15s ease;
+  position:relative;
+}
+.tool-btn:hover{background:var(--surface2);border-color:var(--accent);color:var(--accent)}
+.tool-btn.active{
+  background:rgba(0,229,255,0.15);
+  border-color:var(--accent);
+  color:var(--accent);
+  box-shadow:0 0 8px rgba(0,229,255,0.3);
+}
+.tool-btn[title]::after{
+  content:attr(title);
+  position:absolute;bottom:-28px;left:50%;transform:translateX(-50%);
+  font-size:10px;white-space:nowrap;
+  background:var(--surface2);color:var(--text);
+  padding:2px 8px;border-radius:3px;
+  opacity:0;pointer-events:none;transition:opacity .15s;
+  z-index:10;
+}
+.tool-btn:hover::after{opacity:1}
+
+.sep{width:1px;height:28px;background:var(--border);margin:0 6px}
+
+/* Grid size buttons */
+.size-btn{
+  padding:6px 14px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  cursor:pointer;
+  font-size:13px;font-weight:600;
+  transition:all .15s ease;
+}
+.size-btn:hover{border-color:var(--accent);color:var(--accent)}
+.size-btn.active{
+  background:rgba(0,229,255,0.15);
+  border-color:var(--accent);
+  color:var(--accent);
+}
+
+/* Action buttons */
+.action-btn{
+  padding:8px 16px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  color:var(--text);
+  cursor:pointer;
+  font-size:13px;font-weight:600;
+  transition:all .15s ease;
+  display:flex;align-items:center;gap:6px;
+  white-space:nowrap;
+}
+.action-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--surface2)}
+.action-btn.danger:hover{border-color:var(--danger);color:var(--danger)}
+.action-btn.export{
+  background:linear-gradient(135deg,rgba(0,229,255,0.15),rgba(255,0,229,0.15));
+  border-color:var(--accent);
+  color:var(--accent);
+}
+.action-btn.export:hover{
+  background:linear-gradient(135deg,rgba(0,229,255,0.25),rgba(255,0,229,0.25));
+  box-shadow:0 0 12px rgba(0,229,255,0.3);
+}
+
+/* ===== MAIN LAYOUT ===== */
+.main{
+  flex:1;
+  display:flex;
+  padding:20px 24px;
+  gap:20px;
+  overflow:auto;
+  justify-content:center;
+  align-items:flex-start;
+}
+
+/* ===== CANVAS AREA ===== */
+.canvas-wrapper{
+  display:flex;flex-direction:column;align-items:center;gap:12px;
+}
+.canvas-frame{
+  background:var(--surface);
+  border:2px solid var(--border);
+  border-radius:var(--radius);
+  padding:12px;
+  box-shadow:
+    0 0 20px rgba(0,229,255,0.06),
+    0 4px 20px rgba(0,0,0,0.4);
+  position:relative;
+}
+.canvas-frame::before{
+  content:'';
+  position:absolute;inset:-1px;
+  border-radius:calc(var(--radius) + 1px);
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  opacity:0.15;
+  z-index:0;
+  pointer-events:none;
+}
+.pixel-grid{
+  display:grid;
+  position:relative;
+  z-index:1;
+  background:var(--bg);
+  border:1px solid var(--border);
+  image-rendering:pixelated;
+}
+.pixel-cell{
+  width:100%;aspect-ratio:1;
+  background:transparent;
+  cursor:crosshair;
+  transition:background-color .05s;
+  position:relative;
+}
+.pixel-cell:hover{
+  outline:2px solid var(--accent);
+  outline-offset:-1px;
+  z-index:2;
+}
+.grid-visible .pixel-cell{
+  border-right:1px solid var(--grid-line);
+  border-bottom:1px solid var(--grid-line);
+}
+.grid-visible .pixel-cell:nth-child(1){border-left:1px solid var(--grid-line);border-top:1px solid var(--grid-line)}
+/* We handle grid lines via JS for cleanliness */
+
+.canvas-info{
+  display:flex;align-items:center;gap:16px;
+  font-size:12px;color:var(--muted);
+}
+.canvas-info span{display:flex;align-items:center;gap:4px}
+
+/* ===== SIDEBAR ===== */
+.sidebar{
+  display:flex;flex-direction:column;gap:16px;
+  min-width:200px;
+  max-width:240px;
+}
+.panel{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:14px;
+}
+.panel-title{
+  font-size:11px;font-weight:700;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:1.5px;
+  margin-bottom:10px;
+}
+
+/* Color palette */
+.palette{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:6px;
+}
+.palette-color{
+  aspect-ratio:1;
+  border-radius:var(--radius-sm);
+  cursor:pointer;
+  border:2px solid transparent;
+  transition:all .15s ease;
+  position:relative;
+}
+.palette-color:hover{
+  transform:scale(1.15);
+  z-index:2;
+  box-shadow:0 0 10px rgba(255,255,255,0.2);
+}
+.palette-color.active{
+  border-color:#fff;
+  box-shadow:0 0 12px rgba(255,255,255,0.4);
+  transform:scale(1.1);
+}
+.custom-color-row{
+  margin-top:10px;
+  display:flex;align-items:center;gap:8px;
+}
+.custom-color-input{
+  width:36px;height:36px;
+  border:none;border-radius:var(--radius-sm);
+  cursor:pointer;
+  background:transparent;
+  padding:0;
+}
+.custom-color-input::-webkit-color-swatch-wrapper{padding:2px}
+.custom-color-input::-webkit-color-swatch{border:1px solid var(--border);border-radius:3px}
+.custom-color-label{font-size:12px;color:var(--muted)}
+
+/* Current color display */
+.current-color{
+  display:flex;align-items:center;gap:10px;
+  padding:8px 0;
+}
+.current-swatch{
+  width:40px;height:40px;
+  border-radius:var(--radius-sm);
+  border:2px solid var(--border);
+  box-shadow:0 0 10px rgba(0,0,0,0.3);
+}
+.current-hex{
+  font-family:'Courier New',monospace;
+  font-size:14px;font-weight:600;
+  color:var(--text);
+}
+
+/* History panel */
+.history-info{
+  font-size:12px;color:var(--muted);
+  display:flex;flex-direction:column;gap:6px;
+}
+.history-count{color:var(--accent);font-weight:700}
+
+/* ===== FOOTER ===== */
+.footer{
+  padding:12px 24px;
+  border-top:1px solid var(--border);
+  background:var(--surface);
+  display:flex;align-items:center;justify-content:space-between;
+  flex-shrink:0;
+}
+.footer-brand{
+  font-size:13px;font-weight:800;
+  background:linear-gradient(135deg,var(--accent),var(--accent2));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+}
+.footer-info{font-size:11px;color:var(--muted)}
+
+/* ===== TOAST ===== */
+.toast{
+  position:fixed;bottom:80px;left:50%;transform:translateX(-50%) translateY(20px);
+  background:var(--surface2);
+  border:1px solid var(--accent);
+  color:var(--accent);
+  padding:10px 24px;
+  border-radius:var(--radius);
+  font-size:14px;font-weight:600;
+  box-shadow:0 0 20px rgba(0,229,255,0.3);
+  opacity:0;
+  transition:all .3s ease;
+  z-index:100;
+  pointer-events:none;
+}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+
+/* ===== MODAL (export preview) ===== */
+.modal-overlay{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,0.7);
+  display:none;align-items:center;justify-content:center;
+  z-index:50;
+}
+.modal-overlay.show{display:flex}
+.modal{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:24px;
+  max-width:400px;
+  text-align:center;
+}
+.modal h3{font-size:18px;margin-bottom:16px;color:var(--accent)}
+.modal-preview{
+  background:var(--bg);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:8px;
+  margin-bottom:16px;
+  display:inline-block;
+  image-rendering:pixelated;
+}
+.modal-preview img{image-rendering:pixelated;max-width:100%}
+.modal-actions{display:flex;gap:10px;justify-content:center}
+
+/* ===== ANIMATIONS ===== */
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.6}}
+.recording{animation:pulse 1s infinite}
+
+/* ===== RESPONSIVE ===== */
+@media(max-width:768px){
+  .main{flex-direction:column-reverse;align-items:center;padding:12px}
+  .sidebar{flex-direction:row;flex-wrap:wrap;max-width:100%;min-width:auto}
+  .sidebar .panel{flex:1;min-width:180px}
+  .toolbar{padding:8px 12px;gap:6px}
+  .header{padding:12px 16px}
+  .tool-group{padding:3px 6px}
+  .tool-btn{width:32px;height:32px;font-size:16px}
+  .size-btn{padding:5px 10px;font-size:12px}
+  .action-btn{padding:6px 12px;font-size:12px}
+}
+@media(max-width:480px){
+  .header-left{gap:8px}
+  .logo{font-size:18px}
+  .toolbar{gap:4px}
+  .tool-group-label{display:none}
+}
+
+/* ===== CHECKERBOARD BG for transparency ===== */
+.transparent-bg{
+  background-image:
+    linear-gradient(45deg,#1a1a2e 25%,transparent 25%),
+    linear-gradient(-45deg,#1a1a2e 25%,transparent 25%),
+    linear-gradient(45deg,transparent 75%,#1a1a2e 75%),
+    linear-gradient(-45deg,transparent 75%,#1a1a2e 75%);
+  background-size:12px 12px;
+  background-position:0 0,0 6px,6px -6px,-6px 0px;
+}
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <div>
+      <div class="logo">PIXEL ART STUDIO</div>
+      <div class="logo-sub">Draw your dreams, one pixel at a time</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <div class="canvas-info">
+      <span id="coordDisplay">--</span>
+      <span id="gridSizeDisplay">16 x 16</span>
+    </div>
+  </div>
+</div>
+
+<!-- TOOLBAR -->
+<div class="toolbar">
+  <div class="tool-group">
+    <span class="tool-group-label">Tools</span>
+    <button class="tool-btn active" id="btnPen" onclick="setTool('pen')" title="Pen (P)">&#9998;</button>
+    <button class="tool-btn" id="btnEraser" onclick="setTool('eraser')" title="Eraser (E)">&#9746;</button>
+    <button class="tool-btn" id="btnFill" onclick="setTool('fill')" title="Fill (F)">&#9683;</button>
+    <button class="tool-btn" id="btnPicker" onclick="setTool('picker')" title="Pick Color (I)">&#128899;</button>
+  </div>
+
+  <div class="sep"></div>
+
+  <div class="tool-group">
+    <span class="tool-group-label">Grid</span>
+    <button class="size-btn" onclick="setGridSize(8)">8x8</button>
+    <button class="size-btn active" onclick="setGridSize(16)">16x16</button>
+    <button class="size-btn" onclick="setGridSize(32)">32x32</button>
+  </div>
+
+  <div class="sep"></div>
+
+  <button class="action-btn" onclick="toggleGrid()">
+    <span id="gridToggleIcon">&#9638;</span> Grid
+  </button>
+  <button class="action-btn" onclick="undo()">
+    &#8617; Undo
+  </button>
+  <button class="action-btn danger" onclick="clearAll()">
+    &#10006; Clear
+  </button>
+
+  <div class="sep"></div>
+
+  <button class="action-btn export" onclick="exportPNG()">
+    &#11015; Export PNG
+  </button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <!-- CANVAS -->
+  <div class="canvas-wrapper">
+    <div class="canvas-frame">
+      <div class="pixel-grid transparent-bg grid-visible" id="pixelGrid"></div>
+    </div>
+  </div>
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+    <!-- Current Color -->
+    <div class="panel">
+      <div class="panel-title">Current Color</div>
+      <div class="current-color">
+        <div class="current-swatch" id="currentSwatch" style="background:#00e5ff"></div>
+        <div>
+          <div class="current-hex" id="currentHex">#00E5FF</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Palette -->
+    <div class="panel">
+      <div class="panel-title">Palette</div>
+      <div class="palette" id="palette"></div>
+      <div class="custom-color-row">
+        <input type="color" class="custom-color-input" id="customColor" value="#00e5ff">
+        <span class="custom-color-label">Custom Color</span>
+      </div>
+    </div>
+
+    <!-- History -->
+    <div class="panel">
+      <div class="panel-title">History</div>
+      <div class="history-info">
+        <div>Undo steps: <span class="history-count" id="historyCount">0</span></div>
+        <div style="font-size:11px;color:var(--muted)">
+          Ctrl+Z to undo<br>
+          Ctrl+E to export
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- FOOTER -->
+<div class="footer">
+  <div class="footer-brand">APEX AI</div>
+  <div class="footer-info">Pixel Art Studio v1.0 &mdash; Lesson 4: Build Your Dream</div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- EXPORT MODAL -->
+<div class="modal-overlay" id="exportModal">
+  <div class="modal">
+    <h3>Export Complete!</h3>
+    <div class="modal-preview" id="exportPreview"></div>
+    <div class="modal-actions">
+      <button class="action-btn export" onclick="downloadExport()">Download</button>
+      <button class="action-btn" onclick="closeExportModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- HIDDEN CANVAS FOR EXPORT -->
+<canvas id="exportCanvas" style="display:none"></canvas>
+
+<script>
+// ===== STATE =====
+let gridSize = 16;
+let currentColor = '#00e5ff';
+let currentTool = 'pen';
+let isDrawing = false;
+let showGrid = true;
+let pixelData = [];
+let history = [];
+let maxHistory = 100;
+let cellSize = 24;
+let exportDataUrl = '';
+
+const PALETTE_COLORS = [
+  '#000000','#ffffff','#ff0000','#ff6600',
+  '#ffff00','#39ff14','#00e5ff','#0066ff',
+  '#9900ff','#ff00e5','#ff3366','#8b4513',
+  '#ff9999','#99ff99','#9999ff','#666666',
+];
+
+// ===== INIT =====
+function init() {
+  buildPalette();
+  initGrid();
+  selectPaletteColor(currentColor);
+  document.getElementById('customColor').addEventListener('input', function(e) {
+    setColor(e.target.value);
+  });
+  // Keyboard shortcuts
+  document.addEventListener('keydown', function(e) {
+    if (e.ctrlKey && e.key === 'z') { e.preventDefault(); undo(); }
+    if (e.ctrlKey && e.key === 'e') { e.preventDefault(); exportPNG(); }
+    if (e.key === 'p') setTool('pen');
+    if (e.key === 'e' && !e.ctrlKey) setTool('eraser');
+    if (e.key === 'f') setTool('fill');
+    if (e.key === 'i') setTool('picker');
+    if (e.key === 'g') toggleGrid();
+  });
+}
+
+function initGrid() {
+  // Save old data if resizing
+  var oldData = pixelData.slice();
+  var oldSize = pixelData.length > 0 ? Math.round(Math.sqrt(pixelData.length)) : 0;
+
+  pixelData = new Array(gridSize * gridSize).fill('');
+  // Restore old data where possible
+  var minS = Math.min(oldSize, gridSize);
+  for (var r = 0; r < minS; r++) {
+    for (var c = 0; c < minS; c++) {
+      pixelData[r * gridSize + c] = oldData[r * oldSize + c] || '';
+    }
+  }
+  history = [];
+  renderGrid();
+  updateHistoryCount();
+}
+
+// ===== RENDERING =====
+function renderGrid() {
+  var grid = document.getElementById('pixelGrid');
+  // Calculate cell size based on viewport
+  var maxCanvasSize = Math.min(window.innerWidth - 300, window.innerHeight - 250, 600);
+  if (window.innerWidth < 768) maxCanvasSize = Math.min(window.innerWidth - 40, 500);
+  cellSize = Math.max(8, Math.floor(maxCanvasSize / gridSize));
+
+  grid.style.gridTemplateColumns = 'repeat(' + gridSize + ',' + cellSize + 'px)';
+  grid.style.gridTemplateRows = 'repeat(' + gridSize + ',' + cellSize + 'px)';
+  grid.innerHTML = '';
+
+  for (var i = 0; i < gridSize * gridSize; i++) {
+    var cell = document.createElement('div');
+    cell.className = 'pixel-cell';
+    cell.dataset.index = i;
+    if (pixelData[i]) {
+      cell.style.backgroundColor = pixelData[i];
+    }
+
+    // Events
+    cell.addEventListener('mousedown', onCellMouseDown);
+    cell.addEventListener('mouseenter', onCellMouseEnter);
+    cell.addEventListener('mouseover', onCellHover);
+    cell.addEventListener('mouseleave', onCellLeave);
+    cell.addEventListener('touchstart', onCellTouch, {passive: false});
+    cell.addEventListener('touchmove', onCellTouchMove, {passive: false});
+
+    grid.appendChild(cell);
+  }
+}
+
+// ===== MOUSE EVENTS =====
+function onCellMouseDown(e) {
+  e.preventDefault();
+  isDrawing = true;
+  var idx = parseInt(this.dataset.index);
+  if (currentTool === 'fill') {
+    floodFill(idx, currentColor);
+  } else if (currentTool === 'picker') {
+    if (pixelData[idx]) {
+      setColor(pixelData[idx]);
+      setTool('pen');
+    }
+  } else {
+    saveHistory();
+    paintCell(idx);
+  }
+}
+
+function onCellMouseEnter(e) {
+  if (!isDrawing) return;
+  if (currentTool === 'pen' || currentTool === 'eraser') {
+    paintCell(parseInt(this.dataset.index));
+  }
+}
+
+function onCellHover(e) {
+  var idx = parseInt(this.dataset.index);
+  var row = Math.floor(idx / gridSize);
+  var col = idx % gridSize;
+  document.getElementById('coordDisplay').textContent = '(' + col + ', ' + row + ')';
+}
+
+function onCellLeave(e) {
+  // nothing
+}
+
+document.addEventListener('mouseup', function() { isDrawing = false; });
+
+// ===== TOUCH EVENTS =====
+function onCellTouch(e) {
+  e.preventDefault();
+  isDrawing = true;
+  var idx = parseInt(this.dataset.index);
+  if (currentTool === 'fill') {
+    floodFill(idx, currentColor);
+  } else if (currentTool === 'picker') {
+    if (pixelData[idx]) { setColor(pixelData[idx]); setTool('pen'); }
+  } else {
+    saveHistory();
+    paintCell(idx);
+  }
+}
+
+function onCellTouchMove(e) {
+  e.preventDefault();
+  if (!isDrawing) return;
+  var touch = e.touches[0];
+  var el = document.elementFromPoint(touch.clientX, touch.clientY);
+  if (el && el.classList.contains('pixel-cell')) {
+    if (currentTool === 'pen' || currentTool === 'eraser') {
+      paintCell(parseInt(el.dataset.index));
+    }
+  }
+}
+
+// ===== PAINT =====
+function paintCell(idx) {
+  if (currentTool === 'eraser') {
+    pixelData[idx] = '';
+  } else {
+    pixelData[idx] = currentColor;
+  }
+  var cells = document.querySelectorAll('.pixel-cell');
+  if (cells[idx]) {
+    cells[idx].style.backgroundColor = pixelData[idx] || '';
+  }
+}
+
+// ===== FLOOD FILL =====
+function floodFill(startIdx, fillColor) {
+  saveHistory();
+  var targetColor = pixelData[startIdx];
+  if (targetColor === fillColor) return;
+
+  var stack = [startIdx];
+  var visited = {};
+
+  while (stack.length > 0) {
+    var idx = stack.pop();
+    if (idx < 0 || idx >= gridSize * gridSize) continue;
+    if (visited[idx]) continue;
+    if (pixelData[idx] !== targetColor) continue;
+
+    visited[idx] = true;
+    pixelData[idx] = fillColor;
+
+    var row = Math.floor(idx / gridSize);
+    var col = idx % gridSize;
+
+    if (col > 0) stack.push(idx - 1);
+    if (col < gridSize - 1) stack.push(idx + 1);
+    if (row > 0) stack.push(idx - gridSize);
+    if (row < gridSize - 1) stack.push(idx + gridSize);
+  }
+
+  // Re-render all cells
+  var cells = document.querySelectorAll('.pixel-cell');
+  for (var i = 0; i < cells.length; i++) {
+    cells[i].style.backgroundColor = pixelData[i] || '';
+  }
+}
+
+// ===== TOOLS =====
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('.tool-btn').forEach(function(b) { b.classList.remove('active'); });
+  var btnMap = {pen:'btnPen',eraser:'btnEraser',fill:'btnFill',picker:'btnPicker'};
+  var btn = document.getElementById(btnMap[tool]);
+  if (btn) btn.classList.add('active');
+
+  // Change cursor
+  var grid = document.getElementById('pixelGrid');
+  if (tool === 'eraser') grid.style.cursor = 'cell';
+  else if (tool === 'fill') grid.style.cursor = 'crosshair';
+  else if (tool === 'picker') grid.style.cursor = 'copy';
+  else grid.style.cursor = 'crosshair';
+}
+
+function setColor(color) {
+  currentColor = color;
+  document.getElementById('currentSwatch').style.backgroundColor = color;
+  document.getElementById('currentHex').textContent = color.toUpperCase();
+  document.getElementById('customColor').value = color;
+  // Update palette active state
+  document.querySelectorAll('.palette-color').forEach(function(p) {
+    p.classList.toggle('active', p.dataset.color === color.toLowerCase());
+  });
+}
+
+// ===== GRID SIZE =====
+function setGridSize(size) {
+  if (size === gridSize) return;
+  gridSize = size;
+  document.querySelectorAll('.size-btn').forEach(function(b) { b.classList.remove('active'); });
+  // Find the correct button
+  var btns = document.querySelectorAll('.size-btn');
+  btns.forEach(function(b) {
+    if (b.textContent.trim() === size + 'x' + size) b.classList.add('active');
+  });
+  document.getElementById('gridSizeDisplay').textContent = size + ' x ' + size;
+  initGrid();
+}
+
+// ===== GRID TOGGLE =====
+function toggleGrid() {
+  showGrid = !showGrid;
+  var grid = document.getElementById('pixelGrid');
+  if (showGrid) {
+    grid.classList.add('grid-visible');
+    grid.style.gap = '0px';
+    grid.style.background = 'var(--bg)';
+  } else {
+    grid.classList.remove('grid-visible');
+    grid.style.gap = '0px';
+    grid.style.background = '#111';
+  }
+  showToast(showGrid ? 'Grid ON' : 'Grid OFF');
+}
+
+// ===== CLEAR =====
+function clearAll() {
+  if (pixelData.every(function(c) { return c === ''; })) return;
+  saveHistory();
+  pixelData = new Array(gridSize * gridSize).fill('');
+  var cells = document.querySelectorAll('.pixel-cell');
+  for (var i = 0; i < cells.length; i++) {
+    cells[i].style.backgroundColor = '';
+  }
+  showToast('Canvas cleared');
+}
+
+// ===== UNDO =====
+function saveHistory() {
+  history.push(pixelData.slice());
+  if (history.length > maxHistory) history.shift();
+  updateHistoryCount();
+}
+
+function undo() {
+  if (history.length === 0) {
+    showToast('Nothing to undo');
+    return;
+  }
+  pixelData = history.pop();
+  var cells = document.querySelectorAll('.pixel-cell');
+  for (var i = 0; i < cells.length; i++) {
+    cells[i].style.backgroundColor = pixelData[i] || '';
+  }
+  updateHistoryCount();
+  showToast('Undo (' + history.length + ' left)');
+}
+
+function updateHistoryCount() {
+  document.getElementById('historyCount').textContent = history.length;
+}
+
+// ===== PALETTE =====
+function buildPalette() {
+  var container = document.getElementById('palette');
+  container.innerHTML = '';
+  PALETTE_COLORS.forEach(function(color) {
+    var swatch = document.createElement('div');
+    swatch.className = 'palette-color';
+    swatch.dataset.color = color;
+    swatch.style.backgroundColor = color;
+    if (color === '#000000') {
+      swatch.style.border = '2px solid #333';
+    }
+    swatch.addEventListener('click', function() {
+      selectPaletteColor(color);
+    });
+    container.appendChild(swatch);
+  });
+}
+
+function selectPaletteColor(color) {
+  setColor(color);
+  document.querySelectorAll('.palette-color').forEach(function(p) {
+    p.classList.toggle('active', p.dataset.color === color.toLowerCase());
+  });
+}
+
+// ===== EXPORT =====
+function exportPNG() {
+  var canvas = document.getElementById('exportCanvas');
+  var scale = 16; // each pixel = 16x16 in the exported image
+  canvas.width = gridSize * scale;
+  canvas.height = gridSize * scale;
+  var ctx = canvas.getContext('2d');
+
+  // Transparent background
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  for (var i = 0; i < pixelData.length; i++) {
+    if (pixelData[i]) {
+      var row = Math.floor(i / gridSize);
+      var col = i % gridSize;
+      ctx.fillStyle = pixelData[i];
+      ctx.fillRect(col * scale, row * scale, scale, scale);
+    }
+  }
+
+  exportDataUrl = canvas.toDataURL('image/png');
+
+  // Show modal
+  var preview = document.getElementById('exportPreview');
+  preview.innerHTML = '';
+  var img = document.createElement('img');
+  img.src = exportDataUrl;
+  img.style.width = (gridSize * 4) + 'px';
+  img.style.height = (gridSize * 4) + 'px';
+  img.style.imageRendering = 'pixelated';
+  preview.appendChild(img);
+
+  document.getElementById('exportModal').classList.add('show');
+  showToast('Exported ' + gridSize + 'x' + gridSize + ' image');
+}
+
+function downloadExport() {
+  var link = document.createElement('a');
+  link.download = 'pixel-art-' + gridSize + 'x' + gridSize + '.png';
+  link.href = exportDataUrl;
+  link.click();
+  showToast('Downloaded!');
+}
+
+function closeExportModal() {
+  document.getElementById('exportModal').classList.remove('show');
+}
+
+// Close modal on overlay click
+document.getElementById('exportModal').addEventListener('click', function(e) {
+  if (e.target === this) closeExportModal();
+});
+
+// ===== TOAST =====
+function showToast(msg) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(function() { t.classList.remove('show'); }, 1500);
+}
+
+// ===== RESPONSIVE RESIZE =====
+window.addEventListener('resize', function() {
+  renderGrid();
+  // Re-apply pixel data
+  var cells = document.querySelectorAll('.pixel-cell');
+  for (var i = 0; i < cells.length; i++) {
+    cells[i].style.backgroundColor = pixelData[i] || '';
+  }
+});
+
+// ===== START =====
+init();
+</script>
+</body>
+</html>

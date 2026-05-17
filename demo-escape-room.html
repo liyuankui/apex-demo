@@ -1,0 +1,1517 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Escape Room</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Rajdhani:wght@300;400;500;600;700&display=swap');
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --glow-cyan: #00f0ff;
+    --glow-magenta: #ff00e5;
+    --glow-green: #39ff14;
+    --glow-gold: #ffd700;
+    --glow-red: #ff3131;
+    --bg-dark: #0a0a12;
+    --bg-room: #0d0d1a;
+    --text-primary: #e0e0ff;
+    --text-dim: #7a7a9e;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--bg-dark);
+    color: var(--text-primary);
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 18px;
+  }
+
+  /* ── Background particles canvas ── */
+  #particles {
+    position: fixed; inset: 0;
+    z-index: 0;
+    pointer-events: none;
+  }
+
+  /* ── Scanline overlay ── */
+  .scanlines {
+    position: fixed; inset: 0;
+    z-index: 1;
+    pointer-events: none;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.08) 2px,
+      rgba(0,0,0,0.08) 4px
+    );
+  }
+
+  /* ── Main layout ── */
+  .game-container {
+    position: relative;
+    z-index: 2;
+    width: 100%; height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  /* ── Timer ── */
+  .timer-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    padding: 14px 24px;
+    background: linear-gradient(180deg, rgba(10,10,18,0.95) 0%, rgba(10,10,18,0.7) 100%);
+    border-bottom: 1px solid rgba(0,240,255,0.15);
+    opacity: 0;
+    transition: opacity 0.6s ease;
+  }
+  .timer-bar.visible { opacity: 1; }
+  .timer-label {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 3px;
+  }
+  .timer-value {
+    font-family: 'Orbitron', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--glow-cyan);
+    text-shadow: 0 0 12px rgba(0,240,255,0.5);
+    min-width: 90px;
+    text-align: center;
+  }
+  .room-indicator {
+    font-family: 'Orbitron', monospace;
+    font-size: 12px;
+    color: var(--glow-magenta);
+    letter-spacing: 2px;
+    text-shadow: 0 0 8px rgba(255,0,229,0.4);
+  }
+
+  /* ── Screens ── */
+  .screen {
+    display: none;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 40px 24px;
+    max-width: 700px;
+    width: 100%;
+    animation: screenFadeIn 0.8s ease forwards;
+  }
+  .screen.active { display: flex; }
+
+  @keyframes screenFadeIn {
+    from { opacity: 0; transform: translateY(30px) scale(0.97); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+
+  /* ── Start screen ── */
+  .title {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(32px, 7vw, 64px);
+    font-weight: 900;
+    letter-spacing: 4px;
+    background: linear-gradient(135deg, var(--glow-cyan), var(--glow-magenta));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 20px rgba(0,240,255,0.3));
+    margin-bottom: 8px;
+  }
+
+  .subtitle {
+    font-size: 20px;
+    color: var(--text-dim);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-bottom: 36px;
+  }
+
+  .lock-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+    animation: lockFloat 3s ease-in-out infinite;
+    filter: drop-shadow(0 0 30px rgba(0,240,255,0.3));
+  }
+
+  @keyframes lockFloat {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+
+  .difficulty-select {
+    display: flex;
+    gap: 16px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .diff-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    padding: 10px 24px;
+    border: 1px solid var(--text-dim);
+    background: transparent;
+    color: var(--text-dim);
+    border-radius: 6px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+  .diff-btn:hover {
+    border-color: var(--glow-cyan);
+    color: var(--glow-cyan);
+    box-shadow: 0 0 15px rgba(0,240,255,0.2);
+  }
+  .diff-btn.selected {
+    border-color: var(--glow-cyan);
+    color: var(--glow-cyan);
+    background: rgba(0,240,255,0.08);
+    box-shadow: 0 0 20px rgba(0,240,255,0.15);
+  }
+
+  .start-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    letter-spacing: 4px;
+    padding: 18px 60px;
+    border: 2px solid var(--glow-cyan);
+    background: linear-gradient(135deg, rgba(0,240,255,0.1), rgba(255,0,229,0.1));
+    color: var(--glow-cyan);
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+    position: relative;
+    overflow: hidden;
+  }
+  .start-btn::before {
+    content: '';
+    position: absolute; inset: 0;
+    background: linear-gradient(90deg, transparent, rgba(0,240,255,0.15), transparent);
+    transform: translateX(-100%);
+    animation: shimmer 2.5s infinite;
+  }
+  @keyframes shimmer {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+  }
+  .start-btn:hover {
+    box-shadow: 0 0 30px rgba(0,240,255,0.3), inset 0 0 30px rgba(0,240,255,0.1);
+    transform: scale(1.04);
+    text-shadow: 0 0 12px rgba(0,240,255,0.6);
+  }
+
+  /* ── Room styles ── */
+  .room-number {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    color: var(--glow-magenta);
+    text-shadow: 0 0 10px rgba(255,0,229,0.4);
+    margin-bottom: 12px;
+  }
+
+  .room-title {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(22px, 5vw, 38px);
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin-bottom: 24px;
+    position: relative;
+  }
+  .room-title.r1 { color: var(--glow-cyan); text-shadow: 0 0 20px rgba(0,240,255,0.4); }
+  .room-title.r2 { color: var(--glow-magenta); text-shadow: 0 0 20px rgba(255,0,229,0.4); }
+  .room-title.r3 { color: var(--glow-gold); text-shadow: 0 0 20px rgba(255,215,0,0.4); }
+
+  .room-description {
+    font-size: 18px;
+    line-height: 1.7;
+    color: var(--text-dim);
+    margin-bottom: 32px;
+    max-width: 540px;
+    border-left: 3px solid rgba(0,240,255,0.2);
+    padding-left: 20px;
+    text-align: left;
+  }
+
+  .puzzle-box {
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(0,240,255,0.15);
+    border-radius: 12px;
+    padding: 32px;
+    width: 100%;
+    max-width: 540px;
+    margin-bottom: 24px;
+    position: relative;
+    backdrop-filter: blur(8px);
+  }
+  .puzzle-box::before {
+    content: '';
+    position: absolute;
+    top: -1px; left: 20%; right: 20%; height: 2px;
+    background: linear-gradient(90deg, transparent, var(--glow-cyan), transparent);
+    border-radius: 2px;
+  }
+
+  .puzzle-question {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  .puzzle-clue {
+    font-size: 15px;
+    color: var(--text-dim);
+    margin-bottom: 16px;
+    font-style: italic;
+  }
+
+  .code-grid {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 24px;
+  }
+  .code-digit {
+    width: 56px; height: 64px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'Orbitron', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--glow-cyan);
+    border: 2px solid rgba(0,240,255,0.3);
+    border-radius: 8px;
+    background: rgba(0,240,255,0.05);
+    transition: all 0.2s ease;
+  }
+  .code-digit.filled {
+    border-color: var(--glow-cyan);
+    box-shadow: 0 0 15px rgba(0,240,255,0.2);
+  }
+  .code-digit.active {
+    border-color: var(--glow-magenta);
+    box-shadow: 0 0 15px rgba(255,0,229,0.3);
+  }
+
+  .input-row {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+
+  .answer-input {
+    font-family: 'Orbitron', monospace;
+    font-size: 20px;
+    padding: 14px 24px;
+    border: 2px solid rgba(0,240,255,0.3);
+    border-radius: 8px;
+    background: rgba(0,240,255,0.05);
+    color: var(--glow-cyan);
+    text-align: center;
+    outline: none;
+    transition: all 0.3s ease;
+    min-width: 200px;
+    letter-spacing: 3px;
+  }
+  .answer-input:focus {
+    border-color: var(--glow-cyan);
+    box-shadow: 0 0 20px rgba(0,240,255,0.2);
+  }
+  .answer-input::placeholder {
+    color: rgba(0,240,255,0.25);
+    font-size: 14px;
+    letter-spacing: 1px;
+  }
+
+  .submit-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 3px;
+    padding: 14px 36px;
+    border: 2px solid var(--glow-green);
+    background: rgba(57,255,20,0.08);
+    color: var(--glow-green);
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+  }
+  .submit-btn:hover {
+    box-shadow: 0 0 25px rgba(57,255,20,0.25);
+    background: rgba(57,255,20,0.15);
+    transform: scale(1.03);
+  }
+  .submit-btn:active {
+    transform: scale(0.97);
+  }
+
+  .hint-text {
+    font-size: 13px;
+    color: var(--text-dim);
+    margin-top: 16px;
+    opacity: 0.7;
+  }
+
+  /* ── Feedback ── */
+  .feedback {
+    font-size: 16px;
+    margin-top: 16px;
+    min-height: 24px;
+    transition: all 0.3s ease;
+  }
+  .feedback.error {
+    color: var(--glow-red);
+    text-shadow: 0 0 10px rgba(255,49,49,0.3);
+  }
+  .feedback.success {
+    color: var(--glow-green);
+    text-shadow: 0 0 10px rgba(57,255,20,0.3);
+  }
+
+  /* ── Door animation ── */
+  .door-overlay {
+    position: fixed; inset: 0;
+    z-index: 200;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: var(--bg-dark);
+  }
+  .door-overlay.active {
+    display: flex;
+    animation: doorFadeIn 0.3s ease forwards;
+  }
+  @keyframes doorFadeIn {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+  }
+
+  .door-wrapper {
+    position: relative;
+    width: 200px; height: 300px;
+    perspective: 800px;
+  }
+
+  .door-frame {
+    position: absolute; inset: 0;
+    border: 3px solid var(--glow-cyan);
+    border-radius: 4px;
+    box-shadow: 0 0 30px rgba(0,240,255,0.2), inset 0 0 30px rgba(0,240,255,0.05);
+  }
+
+  .door-panel {
+    position: absolute; inset: 3px;
+    background: linear-gradient(135deg, #1a1a2e, #16213e);
+    border-radius: 2px;
+    transform-origin: left center;
+    transition: transform 1.5s cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .door-panel .door-handle {
+    width: 12px; height: 12px;
+    border-radius: 50%;
+    background: var(--glow-gold);
+    box-shadow: 0 0 10px rgba(255,215,0,0.5);
+    position: absolute;
+    right: 20px;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  .door-panel.opening {
+    transform: rotateY(-105deg);
+  }
+
+  .door-light {
+    position: absolute; inset: 0;
+    background: radial-gradient(ellipse at center, rgba(0,240,255,0.5), transparent 70%);
+    opacity: 0;
+    transition: opacity 0.8s ease 0.6s;
+  }
+  .door-light.visible { opacity: 1; }
+
+  .door-text {
+    position: absolute;
+    bottom: -60px; left: 50%;
+    transform: translateX(-50%);
+    font-family: 'Orbitron', monospace;
+    font-size: 16px;
+    letter-spacing: 4px;
+    color: var(--glow-green);
+    text-shadow: 0 0 15px rgba(57,255,20,0.4);
+    text-transform: uppercase;
+    white-space: nowrap;
+    opacity: 0;
+    transition: opacity 0.5s ease 1.2s;
+  }
+  .door-text.visible { opacity: 1; }
+
+  /* ── Victory screen ── */
+  .victory-title {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(28px, 6vw, 52px);
+    font-weight: 900;
+    letter-spacing: 3px;
+    background: linear-gradient(135deg, var(--glow-gold), var(--glow-cyan));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    filter: drop-shadow(0 0 20px rgba(255,215,0,0.3));
+    margin-bottom: 12px;
+  }
+
+  .victory-time {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(36px, 8vw, 64px);
+    font-weight: 900;
+    color: var(--glow-cyan);
+    text-shadow: 0 0 25px rgba(0,240,255,0.5);
+    margin-bottom: 8px;
+  }
+
+  .victory-subtitle {
+    font-size: 18px;
+    color: var(--text-dim);
+    margin-bottom: 32px;
+    letter-spacing: 2px;
+  }
+
+  .name-form {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  .name-input {
+    font-family: 'Rajdhani', sans-serif;
+    font-size: 18px;
+    padding: 12px 20px;
+    border: 2px solid rgba(255,215,0,0.3);
+    border-radius: 8px;
+    background: rgba(255,215,0,0.05);
+    color: var(--glow-gold);
+    outline: none;
+    min-width: 200px;
+    text-align: center;
+    transition: all 0.3s ease;
+  }
+  .name-input:focus {
+    border-color: var(--glow-gold);
+    box-shadow: 0 0 20px rgba(255,215,0,0.15);
+  }
+  .name-input::placeholder {
+    color: rgba(255,215,0,0.3);
+  }
+
+  .save-btn {
+    font-family: 'Orbitron', monospace;
+    font-size: 13px;
+    letter-spacing: 2px;
+    padding: 12px 28px;
+    border: 2px solid var(--glow-gold);
+    background: rgba(255,215,0,0.08);
+    color: var(--glow-gold);
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+  }
+  .save-btn:hover {
+    box-shadow: 0 0 20px rgba(255,215,0,0.2);
+    background: rgba(255,215,0,0.15);
+  }
+
+  .leaderboard {
+    width: 100%;
+    max-width: 420px;
+    margin-top: 8px;
+  }
+  .leaderboard-title {
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    letter-spacing: 3px;
+    color: var(--glow-magenta);
+    text-shadow: 0 0 10px rgba(255,0,229,0.3);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .leaderboard-list {
+    list-style: none;
+  }
+  .leaderboard-list li {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+    font-size: 16px;
+    transition: background 0.2s;
+  }
+  .leaderboard-list li:hover {
+    background: rgba(255,255,255,0.03);
+  }
+  .leaderboard-list li .rank {
+    font-family: 'Orbitron', monospace;
+    font-weight: 700;
+    font-size: 14px;
+    width: 32px;
+    text-align: center;
+  }
+  .leaderboard-list li .rank.gold { color: var(--glow-gold); }
+  .leaderboard-list li .rank.silver { color: #c0c0c0; }
+  .leaderboard-list li .rank.bronze { color: #cd7f32; }
+  .leaderboard-list li .lb-name {
+    flex: 1;
+    text-align: left;
+    margin-left: 12px;
+  }
+  .leaderboard-list li .lb-time {
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    color: var(--glow-cyan);
+  }
+  .leaderboard-list li.highlight {
+    background: rgba(255,215,0,0.06);
+    border: 1px solid rgba(255,215,0,0.15);
+    border-radius: 6px;
+  }
+
+  .play-again-btn {
+    margin-top: 24px;
+    font-family: 'Orbitron', monospace;
+    font-size: 14px;
+    letter-spacing: 3px;
+    padding: 14px 40px;
+    border: 2px solid var(--glow-cyan);
+    background: rgba(0,240,255,0.08);
+    color: var(--glow-cyan);
+    border-radius: 8px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.3s ease;
+  }
+  .play-again-btn:hover {
+    box-shadow: 0 0 25px rgba(0,240,255,0.2);
+    background: rgba(0,240,255,0.15);
+    transform: scale(1.03);
+  }
+
+  /* ── Confetti canvas ── */
+  #confetti {
+    position: fixed; inset: 0;
+    z-index: 150;
+    pointer-events: none;
+    display: none;
+  }
+
+  /* ── Shake animation ── */
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    10%, 30%, 50%, 70%, 90% { transform: translateX(-6px); }
+    20%, 40%, 60%, 80% { transform: translateX(6px); }
+  }
+  .shake {
+    animation: shake 0.5s ease-in-out;
+  }
+
+  /* ── Pulse glow ── */
+  @keyframes pulseGlow {
+    0%, 100% { box-shadow: 0 0 5px rgba(0,240,255,0.2); }
+    50% { box-shadow: 0 0 25px rgba(0,240,255,0.4); }
+  }
+
+  /* ── Footer ── */
+  .footer {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    text-align: center;
+    padding: 10px;
+    font-family: 'Orbitron', monospace;
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: var(--text-dim);
+    z-index: 10;
+    opacity: 0.5;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 600px) {
+    .puzzle-box { padding: 20px 16px; }
+    .code-digit { width: 46px; height: 54px; font-size: 22px; }
+    .input-row { flex-direction: column; }
+    .answer-input { width: 100%; }
+    .name-form { flex-direction: column; }
+    .name-input { width: 100%; }
+    .room-description { font-size: 16px; padding-left: 14px; }
+    .difficulty-select { gap: 10px; }
+    .diff-btn { padding: 8px 16px; font-size: 11px; }
+  }
+
+  /* ── Glitch text effect ── */
+  @keyframes glitch {
+    0%, 90%, 100% { transform: translate(0); }
+    92% { transform: translate(-2px, 1px); }
+    94% { transform: translate(2px, -1px); }
+    96% { transform: translate(-1px, -2px); }
+    98% { transform: translate(1px, 2px); }
+  }
+  .glitch-text {
+    animation: glitch 4s infinite;
+  }
+
+  /* ── Typing effect for room descriptions ── */
+  .typing-cursor::after {
+    content: '|';
+    animation: blink 0.8s step-end infinite;
+    color: var(--glow-cyan);
+  }
+  @keyframes blink {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="particles"></canvas>
+<div class="scanlines"></div>
+<canvas id="confetti"></canvas>
+
+<!-- Timer Bar -->
+<div class="timer-bar" id="timerBar">
+  <span class="room-indicator" id="roomIndicator">ROOM 1 / 3</span>
+  <span class="timer-label">TIME</span>
+  <span class="timer-value" id="timerValue">0:00</span>
+</div>
+
+<!-- Start Screen -->
+<div class="game-container">
+  <div class="screen active" id="startScreen">
+    <div class="lock-icon">&#128274;</div>
+    <h1 class="title glitch-text">ESCAPE ROOM</h1>
+    <p class="subtitle">Can you break out?</p>
+
+    <div class="difficulty-select">
+      <button class="diff-btn selected" data-diff="easy" onclick="selectDifficulty('easy', this)">Easy</button>
+      <button class="diff-btn" data-diff="medium" onclick="selectDifficulty('medium', this)">Medium</button>
+      <button class="diff-btn" data-diff="hard" onclick="selectDifficulty('hard', this)">Hard</button>
+    </div>
+
+    <button class="start-btn" onclick="startGame()">ENTER</button>
+    <p class="hint-text" style="margin-top:24px;">3 rooms. 3 puzzles. Beat the clock.</p>
+  </div>
+
+  <!-- Room 1: Math -->
+  <div class="screen" id="room1">
+    <div class="room-number">Room 1 of 3</div>
+    <h2 class="room-title r1">The Calculator's Chamber</h2>
+    <div class="room-description" id="room1desc"></div>
+    <div class="puzzle-box">
+      <div class="puzzle-question" id="room1question"></div>
+      <div class="input-row">
+        <input type="text" class="answer-input" id="room1input" placeholder="YOUR ANSWER" autocomplete="off">
+        <button class="submit-btn" onclick="checkRoom1()">UNLOCK</button>
+      </div>
+      <div class="feedback" id="room1feedback"></div>
+    </div>
+    <p class="hint-text" id="room1hint"></p>
+  </div>
+
+  <!-- Room 2: Code -->
+  <div class="screen" id="room2">
+    <div class="room-number">Room 2 of 3</div>
+    <h2 class="room-title r2">The Cipher Vault</h2>
+    <div class="room-description" id="room2desc"></div>
+    <div class="puzzle-box">
+      <div class="puzzle-question" id="room2question"></div>
+      <div class="code-grid" id="codeGrid"></div>
+      <div class="input-row">
+        <input type="hidden" id="room2input">
+        <button class="submit-btn" onclick="checkRoom2()">UNLOCK</button>
+      </div>
+      <div class="feedback" id="room2feedback"></div>
+    </div>
+    <p class="hint-text" id="room2hint"></p>
+  </div>
+
+  <!-- Room 3: Logic -->
+  <div class="screen" id="room3">
+    <div class="room-number">Room 3 of 3</div>
+    <h2 class="room-title r3">The Riddle Sanctuary</h2>
+    <div class="room-description" id="room3desc"></div>
+    <div class="puzzle-box">
+      <div class="puzzle-question" id="room3question"></div>
+      <div class="input-row">
+        <input type="text" class="answer-input" id="room3input" placeholder="YOUR ANSWER" autocomplete="off">
+        <button class="submit-btn" onclick="checkRoom3()">UNLOCK</button>
+      </div>
+      <div class="feedback" id="room3feedback"></div>
+    </div>
+    <p class="hint-text" id="room3hint"></p>
+  </div>
+
+  <!-- Victory -->
+  <div class="screen" id="victoryScreen">
+    <div class="lock-icon" style="animation: none;">&#127881;</div>
+    <h1 class="victory-title">YOU ESCAPED!</h1>
+    <div class="victory-time" id="finalTime">0:00</div>
+    <p class="victory-subtitle">Total Escape Time</p>
+    <div class="name-form" id="nameForm">
+      <input type="text" class="name-input" id="playerName" placeholder="YOUR NAME" maxlength="20" autocomplete="off">
+      <button class="save-btn" onclick="saveScore()">SAVE SCORE</button>
+    </div>
+    <div class="leaderboard" id="leaderboardSection">
+      <div class="leaderboard-title">Leaderboard</div>
+      <ul class="leaderboard-list" id="leaderboardList"></ul>
+    </div>
+    <button class="play-again-btn" onclick="resetGame()">PLAY AGAIN</button>
+  </div>
+</div>
+
+<!-- Door Animation Overlay -->
+<div class="door-overlay" id="doorOverlay">
+  <div class="door-wrapper">
+    <div class="door-frame"></div>
+    <div class="door-panel" id="doorPanel">
+      <div class="door-handle"></div>
+    </div>
+    <div class="door-light" id="doorLight"></div>
+  </div>
+  <div class="door-text" id="doorText">DOOR UNLOCKED</div>
+</div>
+
+<div class="footer">APEX AI &mdash; BUILD YOUR DREAM</div>
+
+<script>
+// ── Audio Engine ──
+const AudioEngine = (() => {
+  let ctx = null;
+  const getCtx = () => {
+    if (!ctx) ctx = new (window.AudioContext || window.webkitAudioContext)();
+    return ctx;
+  };
+
+  const playTone = (freq, duration, type = 'sine', volume = 0.15, detune = 0) => {
+    const c = getCtx();
+    const osc = c.createOscillator();
+    const gain = c.createGain();
+    osc.type = type;
+    osc.frequency.value = freq;
+    osc.detune.value = detune;
+    gain.gain.setValueAtTime(volume, c.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + duration);
+    osc.connect(gain);
+    gain.connect(c.destination);
+    osc.start(c.currentTime);
+    osc.stop(c.currentTime + duration);
+  };
+
+  return {
+    unlock() {
+      const c = getCtx();
+      // Ascending arpeggio
+      [523.25, 659.25, 783.99, 1046.50].forEach((f, i) => {
+        setTimeout(() => playTone(f, 0.4, 'sine', 0.12), i * 120);
+      });
+      // Shimmer
+      setTimeout(() => {
+        playTone(2093, 1.2, 'sine', 0.06);
+        playTone(2637, 1.0, 'sine', 0.04);
+      }, 500);
+    },
+    error() {
+      playTone(150, 0.3, 'sawtooth', 0.1);
+      setTimeout(() => playTone(120, 0.4, 'sawtooth', 0.08), 150);
+    },
+    victory() {
+      const melody = [523.25, 659.25, 783.99, 1046.50, 1318.51, 1567.98, 2093.00];
+      melody.forEach((f, i) => {
+        setTimeout(() => playTone(f, 0.5, 'sine', 0.1), i * 130);
+      });
+      // Final chord
+      setTimeout(() => {
+        playTone(1046.50, 2.0, 'sine', 0.08);
+        playTone(1318.51, 2.0, 'sine', 0.06);
+        playTone(1567.98, 2.0, 'sine', 0.05);
+      }, melody.length * 130);
+    },
+    click() {
+      playTone(800, 0.05, 'square', 0.06);
+    },
+    keyPress() {
+      playTone(600 + Math.random() * 400, 0.06, 'sine', 0.04);
+    }
+  };
+})();
+
+// ── Particles ──
+const ParticleSystem = (() => {
+  const canvas = document.getElementById('particles');
+  const pctx = canvas.getContext('2d');
+  let particles = [];
+  let w, h;
+
+  const resize = () => {
+    w = canvas.width = window.innerWidth;
+    h = canvas.height = window.innerHeight;
+  };
+
+  const createParticle = () => ({
+    x: Math.random() * w,
+    y: Math.random() * h,
+    vx: (Math.random() - 0.5) * 0.3,
+    vy: (Math.random() - 0.5) * 0.3,
+    r: Math.random() * 1.5 + 0.5,
+    a: Math.random() * 0.5 + 0.1,
+    color: Math.random() > 0.5 ? '0,240,255' : '255,0,229'
+  });
+
+  const init = () => {
+    resize();
+    particles = [];
+    const count = Math.min(Math.floor((w * h) / 8000), 120);
+    for (let i = 0; i < count; i++) particles.push(createParticle());
+  };
+
+  const animate = () => {
+    pctx.clearRect(0, 0, w, h);
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      if (p.x < 0) p.x = w;
+      if (p.x > w) p.x = 0;
+      if (p.y < 0) p.y = h;
+      if (p.y > h) p.y = 0;
+      pctx.beginPath();
+      pctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+      pctx.fillStyle = `rgba(${p.color},${p.a})`;
+      pctx.fill();
+    });
+    requestAnimationFrame(animate);
+  };
+
+  return { init, resize, animate };
+})();
+
+// ── Confetti ──
+const ConfettiSystem = (() => {
+  const canvas = document.getElementById('confetti');
+  const cctx = canvas.getContext('2d');
+  let pieces = [];
+  let active = false;
+  let w, h;
+
+  const colors = [
+    '#00f0ff', '#ff00e5', '#39ff14', '#ffd700',
+    '#ff3131', '#7b68ee', '#ff6b6b', '#4ecdc4'
+  ];
+
+  const createPiece = () => ({
+    x: Math.random() * w,
+    y: -20 - Math.random() * 100,
+    w: Math.random() * 10 + 5,
+    h: Math.random() * 6 + 3,
+    vx: (Math.random() - 0.5) * 4,
+    vy: Math.random() * 4 + 2,
+    rot: Math.random() * 360,
+    rv: (Math.random() - 0.5) * 10,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    a: 1
+  });
+
+  const start = () => {
+    canvas.style.display = 'block';
+    canvas.width = w = window.innerWidth;
+    canvas.height = h = window.innerHeight;
+    pieces = [];
+    for (let i = 0; i < 150; i++) pieces.push(createPiece());
+    active = true;
+    animate();
+  };
+
+  const animate = () => {
+    if (!active) return;
+    cctx.clearRect(0, 0, w, h);
+    pieces.forEach(p => {
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.05;
+      p.rot += p.rv;
+      if (p.y > h + 50) p.a -= 0.02;
+      if (p.a <= 0) return;
+      cctx.save();
+      cctx.translate(p.x, p.y);
+      cctx.rotate(p.rot * Math.PI / 180);
+      cctx.globalAlpha = Math.max(0, p.a);
+      cctx.fillStyle = p.color;
+      cctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      cctx.restore();
+    });
+    pieces = pieces.filter(p => p.a > 0);
+    if (pieces.length > 0) {
+      requestAnimationFrame(animate);
+    } else {
+      active = false;
+      canvas.style.display = 'none';
+    }
+  };
+
+  return { start };
+})();
+
+// ── Game State ──
+let difficulty = 'easy';
+let startTime = 0;
+let timerInterval = null;
+let currentRoom = 0;
+let codeDigits = ['', '', '', ''];
+let activeDigit = 0;
+
+// Puzzles per difficulty
+const puzzles = {
+  easy: {
+    room1: {
+      desc: 'You step into a cold stone room. Numbers flicker on the wall in neon light. A heavy steel door blocks your path. Solve the equation to find the code.',
+      question: 'What is  17 &times; 3 &minus; 11 ?',
+      answer: '40',
+      hint: 'Try breaking it into steps: 17 x 3 first, then subtract 11.'
+    },
+    room2: {
+      desc: 'A glowing keypad pulses on the wall. Cryptic symbols surround it. Decipher the clues to find the 4-digit access code.',
+      clues: [
+        'The 1st digit is the number of sides on a triangle',
+        'The 2nd digit is a dozen &divide; 4',
+        'The 3rd digit is 9 &minus; 7',
+        'The 4th digit is the only even single-digit prime'
+      ],
+      answer: ['3', '3', '2', '2'],
+      hint: 'Triangle = 3 sides. A dozen = 12. Think about even primes...'
+    },
+    room3: {
+      desc: 'Ancient inscriptions glow on the walls. A disembodied voice echoes through the chamber, posing a final riddle.',
+      question: 'I have cities, but no houses live there.<br>I have forests, but no trees grow.<br>I have water, but no fish swim.<br><br>What am I?',
+      answer: ['map', 'a map'],
+      hint: 'Think about something that shows all these things... but is flat.'
+    }
+  },
+  medium: {
+    room1: {
+      desc: 'The room hums with electrical energy. Equations race across the ceiling. One answer will unlock the gate.',
+      question: 'What is  2<sup>8</sup> &minus; 2<sup>5</sup> ?',
+      answer: '224',
+      hint: '2^8 = 256 and 2^5 = 32. Subtract!'
+    },
+    room2: {
+      desc: 'The vault demands a precise code. Four encrypted messages flash in sequence. Decode them before time runs out.',
+      clues: [
+        'The number of planets in our solar system',
+        'The atomic number of Carbon',
+        'The number of lives a cat is said to have, divided by 3',
+        'The number that looks the same upside down, and is half of 10'
+      ],
+      answer: ['8', '6', '3', '5'],
+      hint: '8 planets (Pluto is a dwarf planet). Carbon = 6. 9 lives / 3 = 3. 5 is symmetric.'
+    },
+    room3: {
+      desc: 'The final chamber. Walls of light shift and reform. A voice speaks from everywhere at once.',
+      question: 'I am not alive, but I grow.<br>I don\'t have lungs, but I need air.<br>I don\'t have a mouth, but water kills me.<br><br>What am I?',
+      answer: ['fire', 'a fire', 'flame', 'a flame'],
+      hint: 'Think about something that consumes air and is extinguished by water...'
+    }
+  },
+  hard: {
+    room1: {
+      desc: 'A quantum computer flickers in the corner. The display shows a single, deceptively simple expression. The answer must be exact.',
+      question: 'What is  (7! &divide; 7) + 3<sup>3</sup> &minus; 15 ?',
+      answer: '732',
+      hint: '7!/7 = 6! = 720. 3^3 = 27. So 720 + 27 - 15 = ?'
+    },
+    room2: {
+      desc: 'The hardest cipher yet. Four encrypted fragments, each more devious than the last. Focus.',
+      clues: [
+        'The smallest perfect number',
+        'The number of bits in a byte, minus the number of bits in a nibble',
+        'Fibonacci\'s 7th number (starting from 1, 1)',
+        'The square root of 169, minus the number of moons Earth has'
+      ],
+      answer: ['6', '4', '1', '1'],
+      hint: '6 (1+2+3=6). 8-4=4. Fib: 1,1,2,3,5,8,13 = 13... wait, 7th is 13. Hmm, think again: 1,1,2,3,5,8,13... Actually it depends on counting. sqrt(169)=13, minus 1 = 12. Wait... re-read carefully!'
+    },
+    room3: {
+      desc: 'The ultimate test. Reality seems to bend in this chamber. The answer lies beyond ordinary thinking.',
+      question: 'I have keys but no locks.<br>I have a space but no room.<br>You can enter but can\'t go inside.<br>I have a home but nobody lives there.<br><br>What am I?',
+      answer: ['keyboard', 'a keyboard', 'a computer keyboard', 'computer keyboard'],
+      hint: 'You are literally using one right now...'
+    }
+  }
+};
+
+// ── Difficulty Selection ──
+function selectDifficulty(diff, btn) {
+  AudioEngine.click();
+  difficulty = diff;
+  document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('selected'));
+  btn.classList.add('selected');
+}
+
+// ── Screen Management ──
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const screen = document.getElementById(id);
+  screen.classList.add('active');
+  // Re-trigger animation
+  screen.style.animation = 'none';
+  screen.offsetHeight; // reflow
+  screen.style.animation = '';
+}
+
+// ── Timer ──
+function startTimer() {
+  startTime = Date.now();
+  timerInterval = setInterval(updateTimer, 100);
+  document.getElementById('timerBar').classList.add('visible');
+}
+
+function updateTimer() {
+  const elapsed = Date.now() - startTime;
+  const secs = Math.floor(elapsed / 1000);
+  const mins = Math.floor(secs / 60);
+  const s = secs % 60;
+  document.getElementById('timerValue').textContent =
+    `${mins}:${s.toString().padStart(2, '0')}`;
+}
+
+function stopTimer() {
+  clearInterval(timerInterval);
+}
+
+function getElapsedStr() {
+  const elapsed = Date.now() - startTime;
+  const secs = Math.floor(elapsed / 1000);
+  const mins = Math.floor(secs / 60);
+  const s = secs % 60;
+  return `${mins}:${s.toString().padStart(2, '0')}`;
+}
+
+function getElapsedSecs() {
+  return Math.floor((Date.now() - startTime) / 1000);
+}
+
+// ── Type Effect ──
+function typeText(elementId, text, speed = 25) {
+  return new Promise(resolve => {
+    const el = document.getElementById(elementId);
+    el.innerHTML = '';
+    el.classList.add('typing-cursor');
+    let i = 0;
+    const type = () => {
+      if (i < text.length) {
+        if (text.substring(i, i + 5) === '<br/>') {
+          el.innerHTML += '<br/>';
+          i += 5;
+        } else {
+          el.innerHTML += text.charAt(i);
+          i++;
+        }
+        setTimeout(type, speed);
+      } else {
+        el.classList.remove('typing-cursor');
+        resolve();
+      }
+    };
+    type();
+  });
+}
+
+// ── Door Animation ──
+function showDoorAnimation(nextAction) {
+  const overlay = document.getElementById('doorOverlay');
+  const panel = document.getElementById('doorPanel');
+  const light = document.getElementById('doorLight');
+  const text = document.getElementById('doorText');
+
+  overlay.classList.add('active');
+  panel.classList.remove('opening');
+  light.classList.remove('visible');
+  text.classList.remove('visible');
+
+  AudioEngine.unlock();
+
+  setTimeout(() => {
+    panel.classList.add('opening');
+  }, 400);
+
+  setTimeout(() => {
+    light.classList.add('visible');
+  }, 1000);
+
+  setTimeout(() => {
+    text.classList.add('visible');
+  }, 1600);
+
+  setTimeout(() => {
+    overlay.classList.remove('active');
+    panel.classList.remove('opening');
+    light.classList.remove('visible');
+    text.classList.remove('visible');
+    if (nextAction) nextAction();
+  }, 2800);
+}
+
+// ── Start Game ──
+function startGame() {
+  AudioEngine.click();
+  currentRoom = 1;
+  showScreen('room1');
+  startTimer();
+  setupRoom1();
+}
+
+function setupRoom1() {
+  const p = puzzles[difficulty].room1;
+  document.getElementById('roomIndicator').textContent = 'ROOM 1 / 3';
+  typeText('room1desc', p.desc);
+  document.getElementById('room1question').innerHTML = p.question;
+  document.getElementById('room1hint').textContent = '';
+  document.getElementById('room1feedback').textContent = '';
+  document.getElementById('room1input').value = '';
+  setTimeout(() => {
+    document.getElementById('room1input').focus();
+  }, 500);
+
+  // Show hint after 20 seconds
+  setTimeout(() => {
+    if (currentRoom === 1) {
+      document.getElementById('room1hint').textContent = 'Hint: ' + p.hint;
+    }
+  }, 20000);
+}
+
+function setupRoom2() {
+  const p = puzzles[difficulty].room2;
+  document.getElementById('roomIndicator').textContent = 'ROOM 2 / 3';
+  typeText('room2desc', p.desc);
+  document.getElementById('room2question').innerHTML = '';
+  codeDigits = ['', '', '', ''];
+  activeDigit = 0;
+
+  // Build code grid
+  const grid = document.getElementById('codeGrid');
+  grid.innerHTML = '';
+  for (let i = 0; i < 4; i++) {
+    const d = document.createElement('div');
+    d.className = 'code-digit' + (i === 0 ? ' active' : '');
+    d.id = `digit-${i}`;
+    d.textContent = '_';
+    grid.appendChild(d);
+  }
+
+  // Show clues
+  const q = document.getElementById('room2question');
+  q.innerHTML = '';
+  p.clues.forEach((clue, i) => {
+    const div = document.createElement('div');
+    div.style.cssText = 'margin: 8px 0; font-size: 16px; color: #7a7a9e; text-align: left; padding-left: 8px; border-left: 2px solid rgba(255,0,229,0.3);';
+    div.innerHTML = `<span style="color:#ff00e5;font-weight:700;">${i + 1}.</span> ${clue}`;
+    q.appendChild(div);
+  });
+
+  document.getElementById('room2hint').textContent = '';
+  document.getElementById('room2feedback').textContent = '';
+
+  setTimeout(() => {
+    document.getElementById('room2hint').textContent = 'Hint: ' + p.hint;
+  }, 25000);
+}
+
+function setupRoom3() {
+  const p = puzzles[difficulty].room3;
+  document.getElementById('roomIndicator').textContent = 'ROOM 3 / 3';
+  typeText('room3desc', p.desc);
+  document.getElementById('room3question').innerHTML = p.question;
+  document.getElementById('room3hint').textContent = '';
+  document.getElementById('room3feedback').textContent = '';
+  document.getElementById('room3input').value = '';
+  setTimeout(() => {
+    document.getElementById('room3input').focus();
+  }, 500);
+
+  setTimeout(() => {
+    if (currentRoom === 3) {
+      document.getElementById('room3hint').textContent = 'Hint: ' + p.hint;
+    }
+  }, 30000);
+}
+
+// ── Check Answers ──
+function checkRoom1() {
+  const p = puzzles[difficulty].room1;
+  const input = document.getElementById('room1input').value.trim();
+  const feedback = document.getElementById('room1feedback');
+
+  if (!input) {
+    feedback.textContent = 'Type your answer first!';
+    feedback.className = 'feedback error';
+    return;
+  }
+
+  if (input === p.answer) {
+    feedback.textContent = '';
+    currentRoom = 2;
+    showDoorAnimation(() => {
+      showScreen('room2');
+      setupRoom2();
+    });
+  } else {
+    AudioEngine.error();
+    feedback.textContent = 'Wrong answer. Try again!';
+    feedback.className = 'feedback error';
+    document.getElementById('room1input').classList.add('shake');
+    setTimeout(() => {
+      document.getElementById('room1input').classList.remove('shake');
+    }, 500);
+  }
+}
+
+function checkRoom2() {
+  const p = puzzles[difficulty].room2;
+  const feedback = document.getElementById('room2feedback');
+
+  if (codeDigits.includes('')) {
+    feedback.textContent = 'Enter all 4 digits first!';
+    feedback.className = 'feedback error';
+    return;
+  }
+
+  const correct = codeDigits.every((d, i) => d === p.answer[i]);
+  if (correct) {
+    feedback.textContent = '';
+    currentRoom = 3;
+    showDoorAnimation(() => {
+      showScreen('room3');
+      setupRoom3();
+    });
+  } else {
+    AudioEngine.error();
+    feedback.textContent = 'Wrong code. Try again!';
+    feedback.className = 'feedback error';
+    document.getElementById('codeGrid').classList.add('shake');
+    setTimeout(() => {
+      document.getElementById('codeGrid').classList.remove('shake');
+      // Reset digits
+      codeDigits = ['', '', '', ''];
+      activeDigit = 0;
+      for (let i = 0; i < 4; i++) {
+        const d = document.getElementById(`digit-${i}`);
+        d.textContent = '_';
+        d.classList.remove('filled', 'active');
+      }
+      document.getElementById('digit-0').classList.add('active');
+    }, 500);
+  }
+}
+
+function checkRoom3() {
+  const p = puzzles[difficulty].room3;
+  const input = document.getElementById('room3input').value.trim().toLowerCase();
+  const feedback = document.getElementById('room3feedback');
+
+  if (!input) {
+    feedback.textContent = 'Type your answer first!';
+    feedback.className = 'feedback error';
+    return;
+  }
+
+  if (p.answer.includes(input)) {
+    feedback.textContent = '';
+    currentRoom = 0;
+    stopTimer();
+    showDoorAnimation(() => {
+      showVictory();
+    });
+  } else {
+    AudioEngine.error();
+    feedback.textContent = 'Wrong answer. Think harder!';
+    feedback.className = 'feedback error';
+    document.getElementById('room3input').classList.add('shake');
+    setTimeout(() => {
+      document.getElementById('room3input').classList.remove('shake');
+    }, 500);
+  }
+}
+
+// ── Victory ──
+function showVictory() {
+  AudioEngine.victory();
+  const timeStr = getElapsedStr();
+  document.getElementById('finalTime').textContent = timeStr;
+  showScreen('victoryScreen');
+  document.getElementById('timerBar').classList.remove('visible');
+  ConfettiSystem.start();
+  renderLeaderboard();
+}
+
+// ── Leaderboard ──
+function getScores() {
+  try {
+    return JSON.parse(localStorage.getItem('escapeRoomScores') || '[]');
+  } catch {
+    return [];
+  }
+}
+
+function saveScore() {
+  const name = document.getElementById('playerName').value.trim();
+  if (!name) {
+    document.getElementById('playerName').style.borderColor = 'var(--glow-red)';
+    setTimeout(() => {
+      document.getElementById('playerName').style.borderColor = '';
+    }, 1500);
+    return;
+  }
+  AudioEngine.click();
+  const scores = getScores();
+  const elapsed = getElapsedSecs();
+  scores.push({ name, time: elapsed, diff: difficulty, date: Date.now() });
+  scores.sort((a, b) => a.time - b.time);
+  const top = scores.slice(0, 10);
+  localStorage.setItem('escapeRoomScores', JSON.stringify(top));
+  document.getElementById('nameForm').style.display = 'none';
+  renderLeaderboard(name, elapsed);
+}
+
+function renderLeaderboard(highlightName, highlightTime) {
+  const scores = getScores();
+  const list = document.getElementById('leaderboardList');
+  list.innerHTML = '';
+
+  if (scores.length === 0) {
+    list.innerHTML = '<li style="justify-content:center;color:var(--text-dim);">No scores yet. Be the first!</li>';
+    return;
+  }
+
+  scores.forEach((s, i) => {
+    const li = document.createElement('li');
+    const mins = Math.floor(s.time / 60);
+    const secs = s.time % 60;
+    const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+    const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : '';
+    const isHighlight = highlightName && highlightTime && s.name === highlightName && s.time === highlightTime;
+    if (isHighlight) li.className = 'highlight';
+    li.innerHTML = `
+      <span class="rank ${rankClass}">${i + 1}</span>
+      <span class="lb-name">${escapeHTML(s.name)} <span style="font-size:11px;color:var(--text-dim);text-transform:uppercase;">${s.diff || ''}</span></span>
+      <span class="lb-time">${timeStr}</span>
+    `;
+    list.appendChild(li);
+  });
+}
+
+function escapeHTML(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ── Reset ──
+function resetGame() {
+  AudioEngine.click();
+  currentRoom = 0;
+  stopTimer();
+  document.getElementById('timerValue').textContent = '0:00';
+  document.getElementById('nameForm').style.display = '';
+  document.getElementById('playerName').value = '';
+  showScreen('startScreen');
+  document.getElementById('timerBar').classList.remove('visible');
+}
+
+// ── Keyboard Handling ──
+document.addEventListener('keydown', (e) => {
+  // Room 2 code digit input
+  if (currentRoom === 2) {
+    const key = e.key;
+    if (/^[0-9]$/.test(key)) {
+      e.preventDefault();
+      AudioEngine.keyPress();
+      if (activeDigit < 4) {
+        codeDigits[activeDigit] = key;
+        const d = document.getElementById(`digit-${activeDigit}`);
+        d.textContent = key;
+        d.classList.add('filled');
+        d.classList.remove('active');
+        if (activeDigit < 3) {
+          activeDigit++;
+          document.getElementById(`digit-${activeDigit}`).classList.add('active');
+        }
+      }
+    } else if (key === 'Backspace') {
+      e.preventDefault();
+      if (activeDigit > 0 && codeDigits[activeDigit] === '') {
+        const d = document.getElementById(`digit-${activeDigit}`);
+        d.classList.remove('active');
+        activeDigit--;
+      }
+      const d = document.getElementById(`digit-${activeDigit}`);
+      d.textContent = '_';
+      d.classList.remove('filled');
+      d.classList.add('active');
+      codeDigits[activeDigit] = '';
+    } else if (key === 'Enter') {
+      e.preventDefault();
+      checkRoom2();
+    }
+    return;
+  }
+
+  // Enter to submit for room 1 and 3
+  if (e.key === 'Enter') {
+    if (currentRoom === 1) checkRoom1();
+    else if (currentRoom === 3) checkRoom3();
+  }
+});
+
+// Room 1 and 3 input sound
+document.addEventListener('input', (e) => {
+  if (e.target.classList.contains('answer-input')) {
+    AudioEngine.keyPress();
+  }
+});
+
+// ── Initialize ──
+window.addEventListener('resize', ParticleSystem.resize);
+ParticleSystem.init();
+ParticleSystem.animate();
+</script>
+</body>
+</html>

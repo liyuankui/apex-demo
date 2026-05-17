@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Lost Temple — Interactive Text Adventure</title>
+<style>
+/* ========== RESET & ROOT ========== */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --gold:#D4A847;--gold-dim:#8B7332;--gold-bright:#FFD700;
+  --dark:#0A0A0F;--dark-mid:#12121A;--dark-surface:#1A1A26;
+  --text:#E0D8C8;--text-dim:#8A8474;--text-bright:#FFF8E7;
+  --danger:#C0392B;--danger-glow:#E74C3C;
+  --heal:#27AE60;--heal-glow:#2ECC71;
+  --magic:#8E44AD;--magic-glow:#9B59B6;
+  --font-body:'Segoe UI',system-ui,-apple-system,sans-serif;
+  --font-title:'Georgia','Times New Roman',serif;
+}
+html{font-size:16px}
+body{
+  font-family:var(--font-body);background:var(--dark);color:var(--text);
+  min-height:100vh;overflow-x:hidden;
+}
+
+/* ========== ATMOSPHERIC BACKGROUND ========== */
+.atmosphere{
+  position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;
+  background:
+    radial-gradient(ellipse 80% 50% at 50% 0%, rgba(212,168,71,0.06) 0%, transparent 60%),
+    radial-gradient(ellipse 60% 40% at 20% 80%, rgba(142,68,173,0.04) 0%, transparent 50%),
+    radial-gradient(ellipse 50% 50% at 80% 60%, rgba(212,168,71,0.03) 0%, transparent 40%),
+    linear-gradient(180deg, #0A0A0F 0%, #0D0D15 40%, #0F0F1A 100%);
+}
+.atmosphere::before{
+  content:'';position:absolute;top:0;left:0;width:100%;height:100%;
+  background:url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23D4A847' fill-opacity='0.03'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+  animation:patternDrift 30s linear infinite;
+}
+@keyframes patternDrift{
+  0%{transform:translateY(0) translateX(0)}
+  50%{transform:translateY(-30px) translateX(15px)}
+  100%{transform:translateY(0) translateX(0)}
+}
+.particles{position:fixed;top:0;left:0;width:100%;height:100%;z-index:0;pointer-events:none;overflow:hidden}
+.particle{
+  position:absolute;width:2px;height:2px;background:var(--gold);border-radius:50%;
+  opacity:0;animation:particleFloat linear infinite;
+}
+@keyframes particleFloat{
+  0%{opacity:0;transform:translateY(100vh) scale(0)}
+  10%{opacity:0.6}
+  90%{opacity:0.6}
+  100%{opacity:0;transform:translateY(-20vh) scale(1)}
+}
+
+/* ========== LAYOUT ========== */
+.game-container{
+  position:relative;z-index:1;display:grid;
+  grid-template-columns:1fr 220px;
+  min-height:100vh;max-width:1100px;margin:0 auto;
+}
+@media(max-width:768px){
+  .game-container{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .sidebar{order:-1;position:relative;top:auto}
+}
+
+/* ========== SIDEBAR ========== */
+.sidebar{
+  background:linear-gradient(180deg,rgba(26,26,38,0.95),rgba(18,18,26,0.98));
+  border-left:1px solid rgba(212,168,71,0.15);
+  padding:24px 16px;display:flex;flex-direction:column;gap:20px;
+  position:sticky;top:0;height:100vh;overflow-y:auto;
+}
+@media(max-width:768px){
+  .sidebar{
+    height:auto;position:relative;border-left:none;
+    border-bottom:1px solid rgba(212,168,71,0.15);
+    flex-direction:row;flex-wrap:wrap;padding:12px 16px;gap:12px;
+  }
+}
+.sidebar-title{
+  font-family:var(--font-title);font-size:0.75rem;text-transform:uppercase;
+  letter-spacing:3px;color:var(--gold-dim);text-align:center;
+  padding-bottom:12px;border-bottom:1px solid rgba(212,168,71,0.1);
+}
+@media(max-width:768px){.sidebar-title{display:none}}
+.stat-group{display:flex;flex-direction:column;gap:8px}
+@media(max-width:768px){
+  .stat-group{flex:1;min-width:100px}
+  .stat-group-full{flex-basis:100%}
+}
+.stat-label{font-size:0.7rem;text-transform:uppercase;letter-spacing:2px;color:var(--text-dim)}
+.hp-bar-container{
+  width:100%;height:8px;background:rgba(255,255,255,0.05);border-radius:4px;overflow:hidden;
+}
+.hp-bar{
+  height:100%;background:linear-gradient(90deg,var(--danger),var(--heal));
+  border-radius:4px;transition:width 0.6s cubic-bezier(0.25,0.8,0.25,1);
+  box-shadow:0 0 8px rgba(39,174,96,0.3);
+}
+.hp-text{font-size:1.1rem;font-weight:700;color:var(--text-bright);font-family:var(--font-title)}
+.items-list{display:flex;flex-direction:column;gap:6px}
+@media(max-width:768px){.items-list{flex-direction:row;flex-wrap:wrap}}
+.item{
+  font-size:0.8rem;padding:6px 10px;border-radius:6px;
+  background:rgba(212,168,71,0.08);border:1px solid rgba(212,168,71,0.2);
+  color:var(--gold);display:flex;align-items:center;gap:6px;
+  animation:itemAppear 0.4s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes itemAppear{
+  0%{transform:scale(0);opacity:0}
+  100%{transform:scale(1);opacity:1}
+}
+.item-empty{color:var(--text-dim);font-style:italic;font-size:0.75rem}
+.stat-divider{height:1px;background:rgba(212,168,71,0.08)}
+.moves-counter{font-size:0.75rem;color:var(--text-dim);text-align:center}
+.moves-counter span{color:var(--gold);font-weight:700;font-size:1rem}
+
+/* ========== MAIN CONTENT ========== */
+.main-content{
+  padding:40px 32px 100px;display:flex;flex-direction:column;
+  min-height:100vh;justify-content:center;
+}
+@media(max-width:768px){.main-content{padding:20px 16px 80px}}
+
+/* ========== TITLE SCREEN ========== */
+.title-screen{
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  min-height:80vh;text-align:center;animation:fadeIn 1s ease;
+}
+@keyframes fadeIn{0%{opacity:0}100%{opacity:1}}
+.title-icon{font-size:4rem;margin-bottom:16px;animation:iconPulse 3s ease-in-out infinite}
+@keyframes iconPulse{
+  0%,100%{transform:scale(1);filter:drop-shadow(0 0 10px rgba(212,168,71,0.3))}
+  50%{transform:scale(1.1);filter:drop-shadow(0 0 20px rgba(212,168,71,0.6))}
+}
+.title-main{
+  font-family:var(--font-title);font-size:3.2rem;font-weight:700;
+  color:var(--gold);line-height:1.2;margin-bottom:8px;
+  text-shadow:0 0 40px rgba(212,168,71,0.3);
+}
+@media(max-width:480px){.title-main{font-size:2.2rem}}
+.title-sub{
+  font-family:var(--font-title);font-size:1.1rem;color:var(--text-dim);
+  font-style:italic;margin-bottom:40px;letter-spacing:2px;
+}
+.title-desc{
+  max-width:480px;font-size:1rem;line-height:1.8;color:var(--text-dim);
+  margin-bottom:40px;
+}
+.start-btn{
+  background:transparent;border:2px solid var(--gold);color:var(--gold);
+  padding:14px 48px;font-size:1.1rem;font-family:var(--font-title);
+  letter-spacing:3px;text-transform:uppercase;cursor:pointer;
+  border-radius:4px;transition:all 0.3s ease;position:relative;overflow:hidden;
+}
+.start-btn::before{
+  content:'';position:absolute;top:0;left:-100%;width:100%;height:100%;
+  background:linear-gradient(90deg,transparent,rgba(212,168,71,0.15),transparent);
+  transition:left 0.5s ease;
+}
+.start-btn:hover::before{left:100%}
+.start-btn:hover{
+  background:rgba(212,168,71,0.1);box-shadow:0 0 30px rgba(212,168,71,0.2);
+  transform:translateY(-2px);
+}
+
+/* ========== STORY AREA ========== */
+.story-area{display:none;animation:fadeIn 0.5s ease}
+.story-area.active{display:block}
+.node-scene{
+  font-size:0.7rem;text-transform:uppercase;letter-spacing:3px;
+  color:var(--gold-dim);margin-bottom:8px;
+}
+.node-title{
+  font-family:var(--font-title);font-size:1.8rem;font-weight:700;
+  color:var(--gold);margin-bottom:24px;line-height:1.3;
+  text-shadow:0 0 20px rgba(212,168,71,0.15);
+}
+@media(max-width:480px){.node-title{font-size:1.4rem}}
+.story-text{
+  font-size:1.05rem;line-height:2;color:var(--text);margin-bottom:32px;
+  min-height:80px;
+}
+.story-text .cursor{
+  display:inline-block;width:2px;height:1.1em;background:var(--gold);
+  animation:blink 0.8s step-end infinite;vertical-align:text-bottom;margin-left:2px;
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.choices-container{
+  display:flex;flex-direction:column;gap:12px;
+  opacity:0;transform:translateY(10px);
+  transition:opacity 0.5s ease,transform 0.5s ease;
+}
+.choices-container.visible{opacity:1;transform:translateY(0)}
+.choice-card{
+  background:rgba(212,168,71,0.04);border:1px solid rgba(212,168,71,0.12);
+  border-radius:10px;padding:16px 20px;cursor:pointer;
+  transition:all 0.25s ease;display:flex;align-items:center;gap:14px;
+}
+.choice-card:hover{
+  background:rgba(212,168,71,0.1);border-color:rgba(212,168,71,0.3);
+  transform:translateX(6px);box-shadow:0 4px 20px rgba(212,168,71,0.1);
+}
+.choice-card:active{transform:translateX(6px) scale(0.98)}
+.choice-num{
+  width:28px;height:28px;border-radius:50%;border:1px solid var(--gold-dim);
+  display:flex;align-items:center;justify-content:center;
+  font-family:var(--font-title);font-size:0.85rem;color:var(--gold);
+  flex-shrink:0;
+}
+.choice-text{font-size:0.95rem;color:var(--text);line-height:1.5}
+.choice-hint{font-size:0.75rem;color:var(--text-dim);margin-top:3px}
+
+/* ========== STAT CHANGE POPUP ========== */
+.stat-popup{
+  position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);
+  padding:12px 28px;border-radius:8px;font-size:1.2rem;font-weight:700;
+  pointer-events:none;z-index:100;
+  animation:statPopAnim 1.2s cubic-bezier(0.34,1.56,0.64,1) forwards;
+}
+.stat-popup.damage{background:rgba(192,57,43,0.9);color:#fff;box-shadow:0 0 30px rgba(231,76,60,0.5)}
+.stat-popup.heal{background:rgba(39,174,96,0.9);color:#fff;box-shadow:0 0 30px rgba(46,204,113,0.5)}
+.stat-popup.item{background:rgba(212,168,71,0.9);color:#0A0A0F;box-shadow:0 0 30px rgba(255,215,0,0.5)}
+@keyframes statPopAnim{
+  0%{opacity:0;transform:translate(-50%,-50%) scale(0.5)}
+  30%{opacity:1;transform:translate(-50%,-50%) scale(1.1)}
+  50%{transform:translate(-50%,-50%) scale(1)}
+  80%{opacity:1}
+  100%{opacity:0;transform:translate(-50%,-70%) scale(1)}
+}
+
+/* ========== ENDING SCREEN ========== */
+.ending-screen{
+  display:none;flex-direction:column;align-items:center;justify-content:center;
+  min-height:80vh;text-align:center;animation:fadeIn 1s ease;
+}
+.ending-screen.active{display:flex}
+.ending-type{
+  font-size:0.75rem;text-transform:uppercase;letter-spacing:4px;
+  padding:6px 20px;border-radius:20px;margin-bottom:20px;
+}
+.ending-type.good{background:rgba(39,174,96,0.15);color:var(--heal);border:1px solid rgba(39,174,96,0.3)}
+.ending-type.neutral{background:rgba(212,168,71,0.15);color:var(--gold);border:1px solid rgba(212,168,71,0.3)}
+.ending-type.bad{background:rgba(192,57,43,0.15);color:var(--danger);border:1px solid rgba(192,57,43,0.3)}
+.ending-title{
+  font-family:var(--font-title);font-size:2.4rem;font-weight:700;
+  color:var(--gold);margin-bottom:16px;line-height:1.2;
+  text-shadow:0 0 30px rgba(212,168,71,0.2);
+}
+@media(max-width:480px){.ending-title{font-size:1.8rem}}
+.ending-text{
+  max-width:520px;font-size:1.05rem;line-height:1.9;color:var(--text);
+  margin-bottom:32px;
+}
+.ending-stats{
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));
+  gap:12px;width:100%;max-width:500px;margin-bottom:40px;
+}
+.ending-stat{
+  background:rgba(212,168,71,0.05);border:1px solid rgba(212,168,71,0.12);
+  border-radius:10px;padding:14px;text-align:center;
+}
+.ending-stat-label{font-size:0.65rem;text-transform:uppercase;letter-spacing:2px;color:var(--text-dim);margin-bottom:6px}
+.ending-stat-value{font-size:1.3rem;font-weight:700;color:var(--gold);font-family:var(--font-title)}
+.replay-btn{
+  background:transparent;border:2px solid var(--gold);color:var(--gold);
+  padding:12px 40px;font-size:1rem;font-family:var(--font-title);
+  letter-spacing:2px;cursor:pointer;border-radius:4px;
+  transition:all 0.3s ease;
+}
+.replay-btn:hover{
+  background:rgba(212,168,71,0.1);box-shadow:0 0 25px rgba(212,168,71,0.2);
+  transform:translateY(-2px);
+}
+
+/* ========== FOOTER ========== */
+.game-footer{
+  position:fixed;bottom:0;left:0;width:100%;z-index:10;
+  padding:10px 24px;
+  background:linear-gradient(0deg,rgba(10,10,15,0.95),transparent);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.footer-brand{font-size:0.7rem;letter-spacing:2px;color:var(--gold-dim);text-transform:uppercase}
+.footer-brand span{color:var(--gold)}
+
+/* ========== TRANSITIONS ========== */
+.screen-transition{animation:screenSlide 0.6s cubic-bezier(0.25,0.8,0.25,1)}
+@keyframes screenSlide{
+  0%{opacity:0;transform:translateY(20px)}
+  100%{opacity:1;transform:translateY(0)}
+}
+.shake{animation:shakeAnim 0.4s ease}
+@keyframes shakeAnim{
+  0%,100%{transform:translateX(0)}
+  20%{transform:translateX(-8px)}
+  40%{transform:translateX(8px)}
+  60%{transform:translateX(-4px)}
+  80%{transform:translateX(4px)}
+}
+
+/* ========== SOUND TOGGLE ========== */
+.sound-toggle{
+  position:fixed;top:16px;right:16px;z-index:100;
+  background:rgba(26,26,38,0.8);border:1px solid rgba(212,168,71,0.2);
+  border-radius:50%;width:36px;height:36px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  font-size:1rem;transition:all 0.3s ease;
+}
+.sound-toggle:hover{border-color:var(--gold);background:rgba(212,168,71,0.1)}
+
+/* ========== VIGNETTE ========== */
+.vignette{
+  position:fixed;top:0;left:0;width:100%;height:100%;
+  pointer-events:none;z-index:0;
+  background:radial-gradient(ellipse at center,transparent 50%,rgba(0,0,0,0.6) 100%);
+}
+</style>
+</head>
+<body>
+
+<div class="atmosphere"></div>
+<div class="vignette"></div>
+<div class="particles" id="particles"></div>
+
+<button class="sound-toggle" id="soundToggle" title="Toggle Sound">🔊</button>
+
+<div class="game-container">
+  <!-- SIDEBAR -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-title">Explorer Status</div>
+    <div class="stat-group">
+      <div class="stat-label">Health</div>
+      <div class="hp-text" id="hpText">100 HP</div>
+      <div class="hp-bar-container">
+        <div class="hp-bar" id="hpBar" style="width:100%"></div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-group">
+      <div class="stat-label">Inventory</div>
+      <div class="items-list" id="itemsList">
+        <div class="item-empty">No items yet</div>
+      </div>
+    </div>
+    <div class="stat-divider"></div>
+    <div class="stat-group">
+      <div class="stat-label">Moves</div>
+      <div class="moves-counter"><span id="moveCount">0</span> decisions made</div>
+    </div>
+  </aside>
+
+  <!-- MAIN CONTENT -->
+  <main class="main-content" id="mainContent">
+    <!-- Title Screen -->
+    <div class="title-screen" id="titleScreen">
+      <div class="title-icon">🏛️</div>
+      <h1 class="title-main">The Lost Temple</h1>
+      <div class="title-sub">An Interactive Text Adventure</div>
+      <p class="title-desc">
+        Deep in the uncharted jungle, you stumble upon ruins that shouldn't exist.
+        Ancient carvings whisper of treasure — and of something that guards it.
+        Every choice you make shapes your fate.
+      </p>
+      <button class="start-btn" id="startBtn">Begin Your Journey</button>
+    </div>
+
+    <!-- Story Area -->
+    <div class="story-area" id="storyArea">
+      <div class="node-scene" id="nodeScene"></div>
+      <h2 class="node-title" id="nodeTitle"></h2>
+      <div class="story-text" id="storyText"></div>
+      <div class="choices-container" id="choicesContainer"></div>
+    </div>
+
+    <!-- Ending Screen -->
+    <div class="ending-screen" id="endingScreen">
+      <div class="ending-type" id="endingType"></div>
+      <h2 class="ending-title" id="endingTitle"></h2>
+      <p class="ending-text" id="endingText"></p>
+      <div class="ending-stats" id="endingStats"></div>
+      <button class="replay-btn" id="replayBtn">Play Again?</button>
+    </div>
+  </main>
+</div>
+
+<footer class="game-footer">
+  <div class="footer-brand"><span>Apex AI</span> &middot; Interactive Text Adventure</div>
+</footer>
+
+<script>
+// ========== AUDIO ENGINE (Web Audio API) ==========
+const AudioEngine = (() => {
+  let ctx = null;
+  let masterGain = null;
+  let ambientOsc = null;
+  let ambientGain = null;
+  let enabled = true;
+
+  function init() {
+    if (ctx) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    masterGain = ctx.createGain();
+    masterGain.gain.value = 0.3;
+    masterGain.connect(ctx.destination);
+  }
+
+  function playClick() {
+    if (!enabled || !ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(400, ctx.currentTime + 0.08);
+    gain.gain.setValueAtTime(0.15, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.1);
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.1);
+  }
+
+  function playDramatic() {
+    if (!enabled || !ctx) return;
+    [220, 277, 330, 415].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sawtooth';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0, ctx.currentTime + i * 0.12);
+      gain.gain.linearRampToValueAtTime(0.06, ctx.currentTime + i * 0.12 + 0.05);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.12 + 0.8);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(ctx.currentTime + i * 0.12);
+      osc.stop(ctx.currentTime + i * 0.12 + 0.8);
+    });
+  }
+
+  function playItem() {
+    if (!enabled || !ctx) return;
+    [523, 659, 784].forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.12, ctx.currentTime + i * 0.1);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.1 + 0.3);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(ctx.currentTime + i * 0.1);
+      osc.stop(ctx.currentTime + i * 0.1 + 0.3);
+    });
+  }
+
+  function playDamage() {
+    if (!enabled || !ctx) return;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(150, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(60, ctx.currentTime + 0.3);
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+    osc.connect(gain);
+    gain.connect(masterGain);
+    osc.start(ctx.currentTime);
+    osc.stop(ctx.currentTime + 0.35);
+  }
+
+  function playEnding(type) {
+    if (!enabled || !ctx) return;
+    const notes = type === 'good'
+      ? [262, 330, 392, 523, 659]
+      : type === 'bad'
+        ? [392, 349, 330, 262, 220]
+        : [262, 294, 330, 349, 392];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type === 'good' ? 'triangle' : type === 'bad' ? 'sawtooth' : 'sine';
+      osc.frequency.value = freq;
+      gain.gain.setValueAtTime(0.1, ctx.currentTime + i * 0.2);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.2 + 0.5);
+      osc.connect(gain);
+      gain.connect(masterGain);
+      osc.start(ctx.currentTime + i * 0.2);
+      osc.stop(ctx.currentTime + i * 0.2 + 0.5);
+    });
+  }
+
+  function startAmbient() {
+    if (!enabled || !ctx || ambientOsc) return;
+    ambientGain = ctx.createGain();
+    ambientGain.gain.value = 0;
+    ambientGain.gain.linearRampToValueAtTime(0.04, ctx.currentTime + 2);
+
+    // Low drone
+    ambientOsc = ctx.createOscillator();
+    ambientOsc.type = 'sine';
+    ambientOsc.frequency.value = 55;
+
+    const lfo = ctx.createOscillator();
+    lfo.type = 'sine';
+    lfo.frequency.value = 0.3;
+    const lfoGain = ctx.createGain();
+    lfoGain.gain.value = 5;
+    lfo.connect(lfoGain);
+    lfoGain.connect(ambientOsc.frequency);
+
+    // Second layer
+    const osc2 = ctx.createOscillator();
+    osc2.type = 'sine';
+    osc2.frequency.value = 82.5;
+    const gain2 = ctx.createGain();
+    gain2.gain.value = 0.02;
+
+    ambientOsc.connect(ambientGain);
+    osc2.connect(gain2);
+    gain2.connect(masterGain);
+    ambientGain.connect(masterGain);
+
+    ambientOsc.start();
+    osc2.start();
+    lfo.start();
+  }
+
+  function stopAmbient() {
+    if (ambientGain) {
+      ambientGain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1);
+      setTimeout(() => {
+        if (ambientOsc) { ambientOsc.stop(); ambientOsc = null; }
+      }, 1200);
+    }
+  }
+
+  function toggle() {
+    enabled = !enabled;
+    if (!enabled) stopAmbient();
+    else if (ctx) startAmbient();
+    return enabled;
+  }
+
+  return { init, playClick, playDramatic, playItem, playDamage, playEnding, startAmbient, stopAmbient, toggle, get enabled() { return enabled } };
+})();
+
+// ========== PARTICLES ==========
+function createParticles() {
+  const container = document.getElementById('particles');
+  for (let i = 0; i < 20; i++) {
+    const p = document.createElement('div');
+    p.className = 'particle';
+    p.style.left = Math.random() * 100 + '%';
+    p.style.animationDuration = (8 + Math.random() * 12) + 's';
+    p.style.animationDelay = Math.random() * 10 + 's';
+    p.style.width = p.style.height = (1 + Math.random() * 2) + 'px';
+    container.appendChild(p);
+  }
+}
+
+// ========== GAME STATE ==========
+let gameState = { hp: 100, maxHp: 100, items: [], moves: 0, history: [] };
+
+function resetState() {
+  gameState = { hp: 100, maxHp: 100, items: [], moves: 0, history: [] };
+  updateUI();
+}
+
+// ========== UI UPDATES ==========
+function updateUI() {
+  document.getElementById('hpText').textContent = gameState.hp + ' HP';
+  document.getElementById('hpBar').style.width = (gameState.hp / gameState.maxHp * 100) + '%';
+
+  const hpBar = document.getElementById('hpBar');
+  if (gameState.hp <= 25) {
+    hpBar.style.background = 'linear-gradient(90deg, #C0392B, #E74C3C)';
+    hpBar.style.boxShadow = '0 0 10px rgba(231,76,60,0.5)';
+  } else if (gameState.hp <= 50) {
+    hpBar.style.background = 'linear-gradient(90deg, #E67E22, #F39C12)';
+    hpBar.style.boxShadow = '0 0 8px rgba(243,156,18,0.3)';
+  } else {
+    hpBar.style.background = 'linear-gradient(90deg, var(--danger), var(--heal))';
+    hpBar.style.boxShadow = '0 0 8px rgba(39,174,96,0.3)';
+  }
+
+  const list = document.getElementById('itemsList');
+  if (gameState.items.length === 0) {
+    list.innerHTML = '<div class="item-empty">No items yet</div>';
+  } else {
+    list.innerHTML = gameState.items.map(it => `<div class="item">${it.icon} ${it.name}</div>`).join('');
+  }
+
+  document.getElementById('moveCount').textContent = gameState.moves;
+}
+
+function showStatPopup(text, type) {
+  const popup = document.createElement('div');
+  popup.className = 'stat-popup ' + type;
+  popup.textContent = text;
+  document.body.appendChild(popup);
+  setTimeout(() => popup.remove(), 1300);
+}
+
+// ========== TYPEWRITER ==========
+let typewriterTimeout = null;
+function typewrite(element, text, speed, callback) {
+  if (typewriterTimeout) clearTimeout(typewriterTimeout);
+  element.innerHTML = '';
+  let i = 0;
+  const cursor = document.createElement('span');
+  cursor.className = 'cursor';
+
+  function type() {
+    if (i < text.length) {
+      element.textContent = text.substring(0, i + 1);
+      element.appendChild(cursor);
+      i++;
+      const delay = text[i - 1] === '.' || text[i - 1] === '!' || text[i - 1] === '?'
+        ? speed * 6 : text[i - 1] === ',' ? speed * 3 : speed;
+      typewriterTimeout = setTimeout(type, delay);
+    } else {
+      cursor.remove();
+      if (callback) callback();
+    }
+  }
+  type();
+}
+
+// ========== STORY DATA ==========
+const STORY = {
+  // === START ===
+  start: {
+    scene: 'Chapter I',
+    title: 'The Discovery',
+    text: 'You push through the final wall of vines and freeze. Before you stands a temple, ancient beyond reckoning, its stone walls covered in glowing golden symbols. The air hums with energy. A massive doorway looms ahead, partially blocked by rubble. To your left, a narrow crack in the wall glows with faint blue light.',
+    choices: [
+      { text: 'Enter through the main doorway', hint: 'The obvious path — but obvious paths have obvious traps.', next: 'main_hall' },
+      { text: 'Squeeze through the narrow crack', hint: 'Tight, but that blue light is intriguing...', next: 'side_passage', effects: { hp: -5 } },
+      { text: 'Examine the golden symbols first', hint: 'Knowledge is power. Or at least survival.', next: 'examine_symbols', effects: { item: { name: 'Ancient Knowledge', icon: '📖' } } }
+    ]
+  },
+
+  examine_symbols: {
+    scene: 'Chapter I',
+    title: 'The Inscription',
+    text: 'You trace the symbols with your fingers, and they pulse warmly at your touch. Slowly, a pattern emerges — these tell a story. "The Temple of Echoes," you murmur, translating the ancient script. "Three trials guard the Heart. Courage alone is not enough. The wise and the worthy shall prevail." You commit the teachings to memory. The inscription mentions a shadow that feeds on fear, and a guardian made of light.',
+    choices: [
+      { text: 'Enter through the main doorway, forewarned', hint: 'Now you know what to expect.', next: 'main_hall' },
+      { text: 'Find another way — the side crack', hint: 'Maybe you can bypass the trials...', next: 'side_passage', effects: { hp: -5 } }
+    ]
+  },
+
+  side_passage: {
+    scene: 'Chapter I',
+    title: 'The Hidden Corridor',
+    text: 'You squeeze through the crack, sharp stones scraping your arms. You lose some health, but as you emerge on the other side, something catches your eye — a Torch of Azure Flame mounted on the wall, still burning after centuries. It casts no heat, only a cool blue glow. You take it. The corridor opens into a vast underground chamber with a shimmering lake. Something moves beneath the surface.',
+    choices: [
+      { text: 'Take the torch and follow the corridor down', hint: 'The flame seems to react to danger.', next: 'underground_lake', effects: { item: { name: 'Azure Torch', icon: '🔥' } } },
+      { text: 'Double back to the main entrance instead', hint: 'Underground lakes with moving shadows? No thanks.', next: 'main_hall' }
+    ]
+  },
+
+  main_hall: {
+    scene: 'Chapter II',
+    title: 'The Grand Hall',
+    text: 'The main doorway groans open. Inside, a vast hall stretches before you — pillars carved like serpents, their eyes set with gems that seem to follow your movement. At the far end, three passages branch out. The left passage is dark and smells of damp earth. The center passage glows with warm golden light and a low hum. The right passage is lined with mirrors that reflect a version of the hall that doesn\'t quite match reality.',
+    choices: [
+      { text: 'Take the dark passage (left)', hint: 'Darkness hides both danger and treasure.', next: 'dark_passage' },
+      { text: 'Follow the golden light (center)', hint: 'That humming sounds almost like... singing.', next: 'golden_passage' },
+      { text: 'Enter the mirror passage (right)', hint: 'Your reflection is already walking ahead of you.', next: 'mirror_passage' }
+    ]
+  },
+
+  underground_lake: {
+    scene: 'Chapter II',
+    title: 'The Whispering Depths',
+    text: 'You descend into a cathedral-sized cavern. A lake of impossibly clear water stretches before you, lit from below by something luminous. Whispers rise from the surface — fragments of conversations in a language you almost understand. A stone bridge, half-crumbed, crosses to the other side. Beneath the bridge, something ancient stirs, its shape shifting beneath the water like a living shadow.',
+    choices: [
+      { text: 'Cross the bridge carefully', hint: 'Don\'t look down. Don\'t listen to the whispers.', next: 'shadow_trial', effects: { hp: -10 } },
+      { text: 'Use the Azure Torch to light the water', hint: 'The blue flame might reveal what\'s hidden.', next: 'shadow_trial', requires: 'Azure Torch', effects: { item: { name: 'Shadow Essence', icon: '👁️' } } },
+      { text: 'Shout into the cavern to test the echoes', hint: 'Bold. Reckless? Maybe both.', next: 'shadow_trial', effects: { hp: -20 } }
+    ]
+  },
+
+  dark_passage: {
+    scene: 'Chapter II',
+    title: 'The Pillars of Shadow',
+    text: 'The passage narrows until you\'re walking between two rows of pillars. The darkness here is thick, almost liquid. As you move deeper, the shadows detach from the walls and begin to circle you. Shadow creatures — formless, hungry. They feed on your fear. You can feel their cold touch draining your strength.',
+    choices: [
+      { text: 'Stand your ground and face them', hint: 'Fear is the mind-killer. You will not fear.', next: 'shadow_trial', effects: { hp: -10 } },
+      { text: 'Run! Sprint through the passage!', hint: 'Sometimes courage is knowing when to run.', next: 'shadow_trial', effects: { hp: -5 } },
+      { text: 'Recall the inscription\'s wisdom', hint: '"The shadow feeds on fear..." so don\'t feed it.', next: 'shadow_trial', requires: 'Ancient Knowledge' }
+    ]
+  },
+
+  golden_passage: {
+    scene: 'Chapter II',
+    title: 'The Song of Gold',
+    text: 'The golden light intensifies as you walk. The humming crystallizes into a melody — beautiful, ancient, unbearably sad. At the passage\'s end, you find a small shrine. Upon it rests a Crystal of Light, pulsing in time with the music. As you reach for it, the walls begin to close in slowly. The temple is testing whether you\'ll take the treasure or save yourself.',
+    choices: [
+      { text: 'Grab the crystal and run!', hint: 'Fortune favors the bold!', next: 'final_chamber', effects: { hp: -15, item: { name: 'Crystal of Light', icon: '💎' } } },
+      { text: 'Study the shrine — there must be a safe way', hint: 'Every temple has a mechanism. Patience.', next: 'final_chamber', effects: { item: { name: 'Crystal of Light', icon: '💎' } } }
+    ]
+  },
+
+  mirror_passage: {
+    scene: 'Chapter II',
+    title: 'The Fractured Self',
+    text: 'You step into the mirror passage and immediately feel disoriented. Your reflections move independently — one grins when you don\'t, another weeps. The passage splits into a maze of mirrors. Somewhere ahead, you glimpse your own reflection holding a golden key. It beckons you deeper. The air tastes metallic, like lightning.',
+    choices: [
+      { text: 'Follow the reflection with the key', hint: 'Trust yourself? Or trap yourself?', next: 'final_chamber', effects: { hp: -10, item: { name: 'Golden Key', icon: '🗝️' } } },
+      { text: 'Smash the mirrors and force through', hint: 'No more illusions. Raw path.', next: 'final_chamber', effects: { hp: -20 } }
+    ]
+  },
+
+  shadow_trial: {
+    scene: 'Chapter III',
+    title: 'The Heart\'s Chamber',
+    text: 'You emerge into the deepest part of the temple. The Heart of Echoes floats in the center of the room — a gemstone the size of your fist, blazing with inner light. But between you and it stands the Guardian, a towering figure of shifting shadow and gold. It speaks in a voice like grinding stone: "Only the worthy may claim the Heart. Prove yourself." Its eyes burn as it prepares to test you.',
+    choices: [
+      { text: 'Challenge the Guardian head-on!', hint: 'You didn\'t come this far to negotiate.', next: 'ending_bad' },
+      { text: 'Offer the Crystal of Light', hint: 'Light to balance shadow...', next: 'ending_good', requires: 'Crystal of Light' },
+      { text: 'Speak the words from the inscription', hint: '"Courage alone is not enough..."', next: 'ending_good', requires: 'Ancient Knowledge' },
+      { text: 'Use the Golden Key on the sealed door behind it', hint: 'What if the real treasure isn\'t the Heart?', next: 'ending_neutral', requires: 'Golden Key' },
+      { text: 'Show the Shadow Essence to the Guardian', hint: 'It too was once shadow...', next: 'ending_good', requires: 'Shadow Essence' },
+      { text: 'Try to sneak past while it speaks', hint: 'Risky, but you\'re running low on options.', next: 'ending_neutral' }
+    ]
+  },
+
+  final_chamber: {
+    scene: 'Chapter III',
+    title: 'The Heart\'s Chamber',
+    text: 'The passage opens into the temple\'s heart. A vast dome of stone, lit by the Heart of Echoes — a gem blazing with captured starlight, suspended above an altar. But as you approach, the Guardian materializes from the shadows: a being of darkness and gold, ancient beyond counting. "You have come far, mortal. But distance is not worthiness. What do you offer?"',
+    choices: [
+      { text: 'Charge! Attack the Guardian!', hint: 'Sometimes the only way is through.', next: 'ending_bad' },
+      { text: 'Present the Crystal of Light', hint: 'An offering of pure light.', next: 'ending_good', requires: 'Crystal of Light' },
+      { text: 'Speak the ancient words you learned', hint: 'Knowledge is the greatest offering.', next: 'ending_good', requires: 'Ancient Knowledge' },
+      { text: 'Use the Golden Key on the sealed side door', hint: 'Maybe the Heart isn\'t the only treasure.', next: 'ending_neutral', requires: 'Golden Key' },
+      { text: 'Hold up the Azure Torch', hint: 'Its light seems to calm the Guardian.', next: 'ending_neutral' },
+      { text: 'Try to negotiate', hint: 'The Guardian is ancient and wise — perhaps it respects diplomacy.', next: 'ending_bad' }
+    ]
+  },
+
+  // === ENDINGS ===
+  ending_good: {
+    scene: 'The End',
+    title: 'Worthy of the Heart',
+    text: 'The Guardian pauses. Its shadowy form stills, and for the first time, its eyes soften. "You understand," it whispers. "The Heart was never the treasure — the journey was. And you... you walked it with wisdom." The shadows dissolve like morning mist. The Heart of Echoes drifts gently into your hands, warm and humming with a thousand lifetimes of stories. The temple walls begin to glow, revealing murals of every explorer who came before. Your story will join them. As you walk into the sunlight, the temple sings one final note — not of ending, but of beginning.',
+    type: 'good',
+    label: 'Good Ending'
+  },
+
+  ending_neutral: {
+    scene: 'The End',
+    title: 'The Side Door',
+    text: 'While the Guardian watches, you find another way — a passage it doesn\'t guard. Beyond it lies a smaller chamber, modest compared to the Heart\'s dome, but rich with ancient scrolls and artifacts. You haven\'t claimed the Heart, but you\'ve uncovered knowledge that scholars would wage wars over. The Guardian watches you leave without a word. Perhaps it respects your pragmatism. Perhaps it pities your lack of ambition. Either way, you walk out alive, wealthy in a different kind of treasure, and the world will hear of what you found.',
+    type: 'neutral',
+    label: 'Neutral Ending'
+  },
+
+  ending_bad: {
+    scene: 'The End',
+    title: 'Consumed by Shadow',
+    text: 'The Guardian\'s eyes flare with ancient fury. "Foolish mortal. Courage without wisdom is just another form of destruction." The shadows surge. They wrap around you like living chains, cold and unyielding. You struggle, but the darkness is absolute. The last thing you see is the Heart of Echoes, pulsing steadily above you — so close, yet impossibly far. Your consciousness fades into the temple\'s memory, joining the whispers of every explorer who tried and failed. Perhaps the next one will learn from your mistakes.',
+    type: 'bad',
+    label: 'Bad Ending'
+  }
+};
+
+// ========== GAME ENGINE ==========
+let currentNode = null;
+
+function startGame() {
+  AudioEngine.init();
+  AudioEngine.playDramatic();
+  AudioEngine.startAmbient();
+  resetState();
+  document.getElementById('titleScreen').style.display = 'none';
+  document.getElementById('endingScreen').classList.remove('active');
+  document.getElementById('storyArea').classList.add('active');
+  navigateTo('start');
+}
+
+function navigateTo(nodeId) {
+  const node = STORY[nodeId];
+  if (!node) return;
+  currentNode = nodeId;
+
+  // Ending node?
+  if (nodeId.startsWith('ending_')) {
+    showEnding(nodeId, node);
+    return;
+  }
+
+  const area = document.getElementById('storyArea');
+  area.classList.add('screen-transition');
+  setTimeout(() => area.classList.remove('screen-transition'), 600);
+
+  document.getElementById('nodeScene').textContent = node.scene;
+  document.getElementById('nodeTitle').textContent = node.title;
+
+  const choicesContainer = document.getElementById('choicesContainer');
+  choicesContainer.classList.remove('visible');
+  choicesContainer.innerHTML = '';
+
+  typewrite(document.getElementById('storyText'), node.text, 22, () => {
+    buildChoices(node.choices);
+  });
+}
+
+function buildChoices(choices) {
+  const container = document.getElementById('choicesContainer');
+  container.innerHTML = '';
+
+  const visibleChoices = choices.filter(c => {
+    if (c.requires) return gameState.items.some(it => it.name === c.requires);
+    return true;
+  });
+
+  // If all choices are filtered out, show a fallback
+  if (visibleChoices.length === 0) {
+    const fallback = choices.find(c => !c.requires) || choices[0];
+    buildSingleChoice(container, 1, fallback);
+  } else {
+    visibleChoices.forEach((choice, i) => {
+      buildSingleChoice(container, i + 1, choice);
+    });
+  }
+
+  setTimeout(() => container.classList.add('visible'), 50);
+}
+
+function buildSingleChoice(container, num, choice) {
+  const card = document.createElement('div');
+  card.className = 'choice-card';
+  card.innerHTML = `
+    <div class="choice-num">${num}</div>
+    <div>
+      <div class="choice-text">${choice.text}</div>
+      ${choice.hint ? `<div class="choice-hint">${choice.hint}</div>` : ''}
+    </div>
+  `;
+  card.addEventListener('click', () => makeChoice(choice));
+  container.appendChild(card);
+}
+
+function makeChoice(choice) {
+  AudioEngine.playClick();
+  gameState.moves++;
+
+  // Apply effects
+  if (choice.effects) {
+    if (choice.effects.hp) {
+      const change = choice.effects.hp;
+      gameState.hp = Math.max(0, Math.min(gameState.maxHp, gameState.hp + change));
+      if (change < 0) {
+        showStatPopup(change + ' HP', 'damage');
+        AudioEngine.playDamage();
+        document.getElementById('mainContent').classList.add('shake');
+        setTimeout(() => document.getElementById('mainContent').classList.remove('shake'), 400);
+      } else if (change > 0) {
+        showStatPopup('+' + change + ' HP', 'heal');
+        AudioEngine.playItem();
+      }
+    }
+    if (choice.effects.item) {
+      if (!gameState.items.some(it => it.name === choice.effects.item.name)) {
+        gameState.items.push(choice.effects.item);
+        showStatPopup(choice.effects.item.icon + ' ' + choice.effects.item.name, 'item');
+        AudioEngine.playItem();
+      }
+    }
+  }
+
+  updateUI();
+  gameState.history.push(currentNode);
+
+  // Check if HP is 0
+  if (gameState.hp <= 0) {
+    showEnding('ending_bad', STORY.ending_bad);
+    return;
+  }
+
+  navigateTo(choice.next);
+}
+
+function showEnding(nodeId, node) {
+  AudioEngine.stopAmbient();
+  AudioEngine.playEnding(node.type);
+
+  document.getElementById('storyArea').classList.remove('active');
+
+  const screen = document.getElementById('endingScreen');
+  const typeEl = document.getElementById('endingType');
+  typeEl.textContent = node.label;
+  typeEl.className = 'ending-type ' + node.type;
+
+  document.getElementById('endingTitle').textContent = node.title;
+  document.getElementById('endingText').textContent = node.text;
+
+  const statsContainer = document.getElementById('endingStats');
+  const itemsFound = gameState.items.length;
+  statsContainer.innerHTML = `
+    <div class="ending-stat">
+      <div class="ending-stat-label">Final HP</div>
+      <div class="ending-stat-value">${gameState.hp}</div>
+    </div>
+    <div class="ending-stat">
+      <div class="ending-stat-label">Items Found</div>
+      <div class="ending-stat-value">${itemsFound}</div>
+    </div>
+    <div class="ending-stat">
+      <div class="ending-stat-label">Choices Made</div>
+      <div class="ending-stat-value">${gameState.moves}</div>
+    </div>
+    <div class="ending-stat">
+      <div class="ending-stat-label">Ending</div>
+      <div class="ending-stat-value" style="font-size:0.9rem">${node.label}</div>
+    </div>
+  `;
+
+  screen.classList.add('active');
+}
+
+// ========== EVENT LISTENERS ==========
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('replayBtn').addEventListener('click', () => {
+  document.getElementById('endingScreen').classList.remove('active');
+  document.getElementById('titleScreen').style.display = 'flex';
+  resetState();
+});
+
+document.getElementById('soundToggle').addEventListener('click', () => {
+  AudioEngine.init();
+  const on = AudioEngine.toggle();
+  document.getElementById('soundToggle').textContent = on ? '🔊' : '🔇';
+});
+
+// Keyboard support for choices (1, 2, 3)
+document.addEventListener('keydown', (e) => {
+  const num = parseInt(e.key);
+  if (num >= 1 && num <= 3) {
+    const cards = document.querySelectorAll('.choice-card');
+    if (cards[num - 1]) cards[num - 1].click();
+  }
+});
+
+// ========== INIT ==========
+createParticles();
+</script>
+</body>
+</html>

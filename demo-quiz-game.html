@@ -1,0 +1,655 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Who Knows You Best?</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --purple:#7c3aed;--pink:#ec4899;--blue:#3b82f6;--cyan:#06b6d4;
+  --green:#10b981;--yellow:#f59e0b;--red:#ef4444;--orange:#f97316;
+  --bg:#0f0b1a;--card:rgba(255,255,255,0.07);--card-border:rgba(255,255,255,0.12);
+  --text:#f1f5f9;--text-dim:#94a3b8;--radius:16px;
+}
+html{font-size:16px}
+body{
+  font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+  background:var(--bg);color:var(--text);min-height:100vh;
+  overflow-x:hidden;line-height:1.5;
+}
+canvas#confetti{position:fixed;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:9999}
+.bg-blobs{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none}
+.blob{position:absolute;border-radius:50%;filter:blur(80px);opacity:.35;animation:blobMove 20s ease-in-out infinite alternate}
+.blob:nth-child(1){width:400px;height:400px;background:var(--purple);top:-10%;left:-5%;animation-delay:0s}
+.blob:nth-child(2){width:350px;height:350px;background:var(--pink);top:50%;right:-8%;animation-delay:-5s}
+.blob:nth-child(3){width:300px;height:300px;background:var(--blue);bottom:-5%;left:30%;animation-delay:-10s}
+.blob:nth-child(4){width:250px;height:250px;background:var(--cyan);top:20%;left:50%;animation-delay:-15s}
+@keyframes blobMove{0%{transform:translate(0,0) scale(1)}33%{transform:translate(30px,-40px) scale(1.1)}66%{transform:translate(-20px,30px) scale(.9)}100%{transform:translate(10px,-10px) scale(1.05)}}
+
+.screen{display:none;position:relative;z-index:1;min-height:100vh;padding:24px;
+  animation:fadeSlideIn .5s ease-out}
+.screen.active{display:flex;flex-direction:column;align-items:center;justify-content:center}
+@keyframes fadeSlideIn{from{opacity:0;transform:translateY(30px)}to{opacity:1;transform:translateY(0)}}
+
+h1.logo{
+  font-size:clamp(2rem,6vw,3.5rem);font-weight:800;text-align:center;
+  background:linear-gradient(135deg,var(--purple),var(--pink),var(--orange),var(--yellow));
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;background-clip:text;
+  margin-bottom:8px;line-height:1.2;
+}
+h1.logo .sparkle{display:inline-block;animation:sparkle 2s ease-in-out infinite}
+@keyframes sparkle{0%,100%{transform:scale(1) rotate(0)}50%{transform:scale(1.2) rotate(10deg)}}
+.subtitle{text-align:center;color:var(--text-dim);font-size:1.1rem;margin-bottom:32px}
+
+.card{
+  background:var(--card);border:1px solid var(--card-border);
+  border-radius:var(--radius);padding:32px;width:100%;max-width:500px;
+  backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);
+}
+
+input[type="text"]{
+  width:100%;padding:14px 18px;border-radius:12px;border:2px solid var(--card-border);
+  background:rgba(255,255,255,0.05);color:var(--text);font-size:1.1rem;
+  outline:none;transition:border-color .3s,box-shadow .3s;
+}
+input[type="text"]:focus{border-color:var(--purple);box-shadow:0 0 0 3px rgba(124,58,237,0.3)}
+input[type="text"]::placeholder{color:var(--text-dim)}
+
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;gap:8px;
+  padding:14px 32px;border:none;border-radius:12px;font-size:1.1rem;font-weight:700;
+  cursor:pointer;transition:transform .2s,box-shadow .2s,background .2s;
+  color:#fff;width:100%;
+}
+.btn:hover{transform:translateY(-2px);box-shadow:0 8px 25px rgba(0,0,0,0.3)}
+.btn:active{transform:translateY(0);box-shadow:none}
+.btn-primary{background:linear-gradient(135deg,var(--purple),var(--pink))}
+.btn-green{background:linear-gradient(135deg,var(--green),var(--cyan))}
+.btn-orange{background:linear-gradient(135deg,var(--orange),var(--yellow))}
+.btn-blue{background:linear-gradient(135deg,var(--blue),var(--purple))}
+
+.btn-small{padding:10px 20px;font-size:.95rem;width:auto}
+
+.question-card{max-width:560px;text-align:center}
+.question-num{
+  display:inline-block;padding:4px 16px;border-radius:20px;
+  background:linear-gradient(135deg,var(--purple),var(--pink));
+  font-size:.85rem;font-weight:700;margin-bottom:16px;
+}
+.question-text{font-size:clamp(1.15rem,3.5vw,1.5rem);font-weight:700;margin-bottom:28px;line-height:1.4}
+
+.options-grid{display:grid;gap:12px}
+.option-btn{
+  padding:16px 20px;border:2px solid var(--card-border);border-radius:12px;
+  background:var(--card);color:var(--text);font-size:1rem;font-weight:600;
+  cursor:pointer;transition:all .25s;text-align:left;position:relative;overflow:hidden;
+}
+.option-btn:hover{border-color:var(--purple);background:rgba(124,58,237,0.15);transform:translateX(4px)}
+.option-btn.selected{
+  border-color:var(--green);background:rgba(16,185,129,0.2);
+  box-shadow:0 0 20px rgba(16,185,129,0.15);
+}
+.option-btn.selected::after{
+  content:'';position:absolute;top:0;left:0;right:0;bottom:0;
+  background:linear-gradient(135deg,transparent,rgba(16,185,129,0.1));pointer-events:none;
+}
+.option-letter{
+  display:inline-flex;align-items:center;justify-content:center;
+  width:28px;height:28px;border-radius:8px;
+  background:rgba(255,255,255,0.1);font-weight:800;font-size:.85rem;
+  margin-right:12px;flex-shrink:0;
+}
+.option-btn.selected .option-letter{background:var(--green);color:#fff}
+
+.progress-bar{width:100%;max-width:560px;margin-bottom:24px}
+.progress-track{height:6px;border-radius:3px;background:rgba(255,255,255,0.1);overflow:hidden}
+.progress-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,var(--purple),var(--pink),var(--orange));transition:width .5s ease}
+.progress-label{font-size:.8rem;color:var(--text-dim);margin-top:6px;text-align:right}
+
+/* Score screen */
+.score-circle{
+  width:160px;height:160px;border-radius:50%;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  font-size:3.5rem;font-weight:900;margin:0 auto 20px;position:relative;
+  background:linear-gradient(135deg,var(--purple),var(--pink));
+  box-shadow:0 0 60px rgba(124,58,237,0.3);
+  animation:scorePop .6s cubic-bezier(.175,.885,.32,1.275);
+}
+.score-circle .score-label{font-size:.8rem;font-weight:600;opacity:.8;margin-top:-4px}
+@keyframes scorePop{from{transform:scale(0);opacity:0}to{transform:scale(1);opacity:1}}
+
+.score-reaction{font-size:3rem;text-align:center;margin-bottom:8px;animation:bounce 1s ease infinite}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+.score-message{text-align:center;font-size:1.3rem;font-weight:700;margin-bottom:24px}
+
+.friend-answer{
+  padding:12px 16px;border-radius:10px;margin-bottom:8px;
+  display:flex;align-items:center;gap:12px;font-size:.95rem;text-align:left;
+}
+.friend-answer.correct{background:rgba(16,185,129,0.15);border:1px solid rgba(16,185,129,0.3)}
+.friend-answer.wrong{background:rgba(239,68,68,0.1);border:1px solid rgba(239,68,68,0.25)}
+.answer-icon{font-size:1.3rem;flex-shrink:0}
+.answer-detail{flex:1}
+.answer-q{font-weight:600;font-size:.85rem;color:var(--text-dim);margin-bottom:2px}
+.answer-a{font-weight:700}
+
+/* Leaderboard */
+.leaderboard{width:100%;max-width:500px;margin-top:20px}
+.leaderboard h3{font-size:1.1rem;margin-bottom:12px;color:var(--text-dim);text-align:center}
+.lb-row{
+  display:flex;align-items:center;gap:12px;padding:10px 16px;
+  border-radius:10px;margin-bottom:6px;
+  background:var(--card);border:1px solid var(--card-border);
+  transition:transform .2s;
+}
+.lb-row:hover{transform:translateX(4px)}
+.lb-rank{
+  width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-weight:800;font-size:.9rem;flex-shrink:0;
+}
+.lb-rank.gold{background:linear-gradient(135deg,#fbbf24,#f59e0b);color:#000}
+.lb-rank.silver{background:linear-gradient(135deg,#d1d5db,#9ca3af);color:#000}
+.lb-rank.bronze{background:linear-gradient(135deg,#f97316,#ea580c);color:#fff}
+.lb-rank.normal{background:rgba(255,255,255,0.1);color:var(--text-dim)}
+.lb-name{flex:1;font-weight:600}
+.lb-score{font-weight:800;color:var(--pink)}
+.lb-outof{color:var(--text-dim);font-size:.85rem;font-weight:400}
+
+/* Pass device screen */
+.pass-emoji{font-size:4rem;margin-bottom:16px;animation:spin 3s linear infinite}
+@keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+/* Footer */
+.footer{
+  position:fixed;bottom:0;left:0;right:0;z-index:10;
+  padding:10px;text-align:center;font-size:.75rem;color:var(--text-dim);
+  background:linear-gradient(transparent,rgba(15,11,26,.9));
+}
+.footer span{color:var(--pink);font-weight:700}
+
+/* Friend name input */
+.friend-input-group{display:flex;gap:10px;margin-top:20px}
+.friend-input-group input{flex:1}
+
+/* Responsive */
+@media(max-width:480px){
+  .card{padding:24px 18px}
+  .option-btn{padding:13px 14px;font-size:.92rem}
+  .score-circle{width:130px;height:130px;font-size:2.8rem}
+  .footer{font-size:.65rem}
+}
+
+/* Slide animations */
+.slide-in-right{animation:slideInRight .4s ease-out}
+.slide-in-left{animation:slideInLeft .4s ease-out}
+@keyframes slideInRight{from{opacity:0;transform:translateX(60px)}to{opacity:1;transform:translateX(0)}}
+@keyframes slideInLeft{from{opacity:0;transform:translateX(-60px)}to{opacity:1;transform:translateX(0)}}
+
+/* Pulse glow for CTA */
+.pulse-glow{animation:pulseGlow 2s ease-in-out infinite}
+@keyframes pulseGlow{0%,100%{box-shadow:0 0 20px rgba(124,58,237,0.3)}50%{box-shadow:0 0 35px rgba(124,58,237,0.6)}}
+
+/* Play again section */
+.play-again{display:flex;gap:12px;width:100%;max-width:500px;margin-top:16px}
+.play-again .btn{flex:1}
+
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+
+<div class="bg-blobs">
+  <div class="blob"></div><div class="blob"></div><div class="blob"></div><div class="blob"></div>
+</div>
+<canvas id="confetti"></canvas>
+
+<!-- SCREEN 1: Title -->
+<div id="screen-title" class="screen active">
+  <div style="text-align:center">
+    <h1 class="logo">
+      <span class="sparkle">Who</span> Knows You <span class="sparkle">Best</span>?
+    </h1>
+    <p class="subtitle">Answer 8 questions, then let your friend guess!</p>
+  </div>
+  <div class="card" style="margin-top:24px">
+    <label style="font-weight:600;margin-bottom:8px;display:block">Your Name</label>
+    <input type="text" id="player-name" placeholder="Type your name..." maxlength="20" autocomplete="off">
+    <button class="btn btn-primary pulse-glow" style="margin-top:16px" onclick="startGame()">Let's Go!</button>
+  </div>
+</div>
+
+<!-- SCREEN 2: Player answers questions -->
+<div id="screen-player" class="screen">
+  <div class="progress-bar">
+    <div class="progress-track"><div class="progress-fill" id="player-progress"></div></div>
+    <div class="progress-label" id="player-progress-label">1 / 8</div>
+  </div>
+  <div class="question-card card" id="player-question-card">
+    <div class="question-num" id="player-qnum">Question 1</div>
+    <div class="question-text" id="player-qtext"></div>
+    <div class="options-grid" id="player-options"></div>
+  </div>
+</div>
+
+<!-- SCREEN 3: Pass to friend -->
+<div id="screen-pass" class="screen">
+  <div class="pass-emoji">📱</div>
+  <h1 class="logo" style="font-size:clamp(1.5rem,4vw,2.2rem)">Pass to Your Friend!</h1>
+  <p class="subtitle" id="pass-subtitle">Don't peek at the answers!</p>
+  <div class="card" style="margin-top:16px;text-align:center">
+    <label style="font-weight:600;margin-bottom:8px;display:block">Friend's Name</label>
+    <input type="text" id="friend-name" placeholder="Friend's name..." maxlength="20" autocomplete="off">
+    <button class="btn btn-green pulse-glow" style="margin-top:16px" onclick="startFriendRound()">Ready to Guess!</button>
+  </div>
+</div>
+
+<!-- SCREEN 4: Friend guesses -->
+<div id="screen-friend" class="screen">
+  <div class="progress-bar">
+    <div class="progress-track"><div class="progress-fill" id="friend-progress"></div></div>
+    <div class="progress-label" id="friend-progress-label">1 / 8</div>
+  </div>
+  <div class="question-card card" id="friend-question-card">
+    <div class="question-num" id="friend-qnum">Question 1</div>
+    <div class="question-text" id="friend-qtext"></div>
+    <div class="options-grid" id="friend-options"></div>
+  </div>
+</div>
+
+<!-- SCREEN 5: Score -->
+<div id="screen-score" class="screen">
+  <div id="score-content" style="width:100%;max-width:560px;padding-bottom:60px"></div>
+</div>
+
+<footer class="footer">
+  Powered by <span>Apex AI</span> &mdash; Built with curiosity &amp; code
+</footer>
+
+<script>
+// ===== QUESTIONS =====
+const QUESTIONS = [
+  {
+    q: "If I could have any superpower, it would be...",
+    options: ["Flying through the sky", "Reading people's minds", "Time travel to any era", "Turning invisible at will"]
+  },
+  {
+    q: "What would I do with $1 million?",
+    options: ["Travel the world", "Start my own business", "Donate to charity", "Buy a dream house"]
+  },
+  {
+    q: "My absolute favorite food is...",
+    options: ["Pizza (classic for a reason)", "Sushi (fancy & delicious)", "Burgers (the ultimate comfort)", "Hot pot (warm & social)"]
+  },
+  {
+    q: "If I were an animal, I'd be...",
+    options: ["A loyal dog", "A clever fox", "A majestic eagle", "A playful dolphin"]
+  },
+  {
+    q: "My hidden talent is...",
+    options: ["Making people laugh", "Remembering random facts", "Cooking something amazing", "Singing in the shower"]
+  },
+  {
+    q: "On a perfect weekend, I would...",
+    options: ["Play video games all day", "Hang out with friends", "Read or watch movies", "Go on an adventure outside"]
+  },
+  {
+    q: "If I could visit anywhere, I'd go to...",
+    options: ["Tokyo, Japan", "New York City", "Paris, France", "A tropical island"]
+  },
+  {
+    q: "My biggest fear is...",
+    options: ["Heights (nope, too high!)", "Spiders & bugs (no thanks!)", "Public speaking (stage fright!)", "The dark (who's there?!)"]
+  }
+];
+
+const LETTERS = ['A','B','C','D'];
+
+// ===== STATE =====
+let playerName = '';
+let friendName = '';
+let playerAnswers = [];
+let friendAnswers = [];
+let currentQ = 0;
+
+// ===== SCREENS =====
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  const el = document.getElementById('screen-' + id);
+  el.classList.add('active');
+  // Re-trigger animation
+  el.style.animation = 'none';
+  el.offsetHeight;
+  el.style.animation = '';
+}
+
+// ===== TITLE / START =====
+document.getElementById('player-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startGame();
+});
+
+function startGame() {
+  playerName = document.getElementById('player-name').value.trim();
+  if (!playerName) {
+    shakeElement(document.getElementById('player-name'));
+    return;
+  }
+  playerAnswers = [];
+  currentQ = 0;
+  showScreen('player');
+  renderPlayerQuestion();
+}
+
+function shakeElement(el) {
+  el.style.animation = 'none';
+  el.offsetHeight;
+  el.style.animation = 'shake .4s ease';
+  setTimeout(() => el.style.animation = '', 500);
+}
+
+// ===== PLAYER QUESTION =====
+function renderPlayerQuestion() {
+  const q = QUESTIONS[currentQ];
+  const card = document.getElementById('player-question-card');
+  card.className = 'question-card card slide-in-right';
+
+  document.getElementById('player-qnum').textContent = 'Question ' + (currentQ + 1);
+  document.getElementById('player-qtext').textContent = q.q;
+
+  const grid = document.getElementById('player-options');
+  grid.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.innerHTML = '<span class="option-letter">' + LETTERS[i] + '</span>' + opt;
+    btn.onclick = () => selectPlayerOption(i);
+    grid.appendChild(btn);
+  });
+
+  // Progress
+  const pct = ((currentQ) / QUESTIONS.length * 100);
+  document.getElementById('player-progress').style.width = pct + '%';
+  document.getElementById('player-progress-label').textContent = (currentQ + 1) + ' / ' + QUESTIONS.length;
+}
+
+function selectPlayerOption(index) {
+  playerAnswers[currentQ] = index;
+
+  // Visual feedback
+  const btns = document.querySelectorAll('#player-options .option-btn');
+  btns.forEach((b, i) => {
+    b.classList.toggle('selected', i === index);
+    b.style.pointerEvents = 'none';
+  });
+
+  setTimeout(() => {
+    if (currentQ < QUESTIONS.length - 1) {
+      currentQ++;
+      renderPlayerQuestion();
+    } else {
+      // Done with player questions
+      document.getElementById('pass-subtitle').textContent =
+        playerName + ', hand the device to your friend!';
+      document.getElementById('friend-name').value = '';
+      showScreen('pass');
+    }
+  }, 500);
+}
+
+// ===== FRIEND ROUND =====
+document.getElementById('friend-name').addEventListener('keydown', e => {
+  if (e.key === 'Enter') startFriendRound();
+});
+
+function startFriendRound() {
+  friendName = document.getElementById('friend-name').value.trim();
+  if (!friendName) {
+    shakeElement(document.getElementById('friend-name'));
+    return;
+  }
+  friendAnswers = [];
+  currentQ = 0;
+  showScreen('friend');
+  renderFriendQuestion();
+}
+
+function renderFriendQuestion() {
+  const q = QUESTIONS[currentQ];
+  const card = document.getElementById('friend-question-card');
+  card.className = 'question-card card slide-in-right';
+
+  document.getElementById('friend-qnum').textContent = 'Question ' + (currentQ + 1);
+  document.getElementById('friend-qtext').textContent = q.q;
+
+  const grid = document.getElementById('friend-options');
+  grid.innerHTML = '';
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'option-btn';
+    btn.innerHTML = '<span class="option-letter">' + LETTERS[i] + '</span>' + opt;
+    btn.onclick = () => selectFriendOption(i);
+    grid.appendChild(btn);
+  });
+
+  const pct = ((currentQ) / QUESTIONS.length * 100);
+  document.getElementById('friend-progress').style.width = pct + '%';
+  document.getElementById('friend-progress-label').textContent = (currentQ + 1) + ' / ' + QUESTIONS.length;
+}
+
+function selectFriendOption(index) {
+  friendAnswers[currentQ] = index;
+
+  const btns = document.querySelectorAll('#friend-options .option-btn');
+  btns.forEach((b, i) => {
+    b.classList.toggle('selected', i === index);
+    b.style.pointerEvents = 'none';
+  });
+
+  setTimeout(() => {
+    if (currentQ < QUESTIONS.length - 1) {
+      currentQ++;
+      renderFriendQuestion();
+    } else {
+      showScore();
+    }
+  }, 500);
+}
+
+// ===== SCORE =====
+function showScore() {
+  let correct = 0;
+  for (let i = 0; i < QUESTIONS.length; i++) {
+    if (playerAnswers[i] === friendAnswers[i]) correct++;
+  }
+
+  // Save to leaderboard
+  saveToLeaderboard(playerName, friendName, correct);
+
+  // Build reaction
+  let emoji, message;
+  if (correct === 8) {
+    emoji = '🏆'; message = 'PERFECT! ' + friendName + ' knows ' + playerName + ' inside out!';
+  } else if (correct >= 6) {
+    emoji = '🌟'; message = 'Wow! ' + friendName + ' really gets ' + playerName + '!';
+  } else if (correct >= 4) {
+    emoji = '😊'; message = 'Not bad! You two are pretty good friends!';
+  } else if (correct >= 2) {
+    emoji = '🤔'; message = 'Hmm... maybe spend more time together?';
+  } else {
+    emoji = '😂'; message = 'Do you two even know each other?!';
+  }
+
+  const lbHTML = getLeaderboardHTML();
+
+  let html = '<div class="score-reaction">' + emoji + '</div>';
+  html += '<div class="score-circle">' + correct + '<span class="score-label">out of 8</span></div>';
+  html += '<div class="score-message">' + message + '</div>';
+
+  // Answer breakdown
+  html += '<div style="margin:16px 0 24px">';
+  for (let i = 0; i < QUESTIONS.length; i++) {
+    const isCorrect = playerAnswers[i] === friendAnswers[i];
+    const q = QUESTIONS[i];
+    html += '<div class="friend-answer ' + (isCorrect ? 'correct' : 'wrong') + '">';
+    html += '<span class="answer-icon">' + (isCorrect ? '&#10004;' : '&#10060;') + '</span>';
+    html += '<div class="answer-detail">';
+    html += '<div class="answer-q">Q' + (i+1) + ': ' + q.q + '</div>';
+    html += '<div class="answer-a">';
+    html += playerName + ': ' + q.options[playerAnswers[i]];
+    if (!isCorrect) {
+      html += ' &middot; ' + friendName + ': ' + q.options[friendAnswers[i]];
+    }
+    html += '</div></div></div>';
+  }
+  html += '</div>';
+
+  // Leaderboard
+  html += lbHTML;
+
+  // Play again
+  html += '<div class="play-again">';
+  html += '<button class="btn btn-blue" onclick="playAgainSamePlayer()">Play Again<br><small style="font-weight:400;font-size:.75rem">Same player</small></button>';
+  html += '<button class="btn btn-orange" onclick="playAgainNew()">New Game</button>';
+  html += '</div>';
+
+  document.getElementById('score-content').innerHTML = html;
+  showScreen('score');
+
+  // Confetti for high scores
+  if (correct >= 6) {
+    launchConfetti();
+  }
+
+  // Update progress to full
+  document.getElementById('friend-progress') && (document.getElementById('friend-progress').style.width = '100%');
+}
+
+function playAgainSamePlayer() {
+  friendAnswers = [];
+  currentQ = 0;
+  document.getElementById('pass-subtitle').textContent = playerName + ', hand the device to a friend!';
+  document.getElementById('friend-name').value = '';
+  showScreen('pass');
+}
+
+function playAgainNew() {
+  playerAnswers = [];
+  friendAnswers = [];
+  currentQ = 0;
+  document.getElementById('player-name').value = '';
+  showScreen('title');
+}
+
+// ===== LEADERBOARD =====
+function getLeaderboard() {
+  try {
+    return JSON.parse(localStorage.getItem('wkyb_leaderboard') || '[]');
+  } catch { return []; }
+}
+
+function saveToLeaderboard(player, friend, score) {
+  const lb = getLeaderboard();
+  lb.push({ player, friend, score, date: new Date().toLocaleDateString() });
+  lb.sort((a, b) => b.score - a.score || a.date.localeCompare(b.date));
+  // Keep top 20
+  if (lb.length > 20) lb.length = 20;
+  localStorage.setItem('wkyb_leaderboard', JSON.stringify(lb));
+}
+
+function getLeaderboardHTML() {
+  const lb = getLeaderboard();
+  if (!lb.length) return '';
+
+  let html = '<div class="leaderboard"><h3>Leaderboard</h3>';
+  lb.slice(0, 10).forEach((entry, i) => {
+    const rankClass = i === 0 ? 'gold' : i === 1 ? 'silver' : i === 2 ? 'bronze' : 'normal';
+    html += '<div class="lb-row">';
+    html += '<div class="lb-rank ' + rankClass + '">' + (i + 1) + '</div>';
+    html += '<div class="lb-name">' + escapeHtml(entry.player) + ' &amp; ' + escapeHtml(entry.friend) + '</div>';
+    html += '<div class="lb-score">' + entry.score + '<span class="lb-outof">/8</span></div>';
+    html += '</div>';
+  });
+  html += '</div>';
+  return html;
+}
+
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+// ===== CONFETTI =====
+function launchConfetti() {
+  const canvas = document.getElementById('confetti');
+  const ctx = canvas.getContext('2d');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const colors = ['#7c3aed','#ec4899','#3b82f6','#06b6d4','#10b981','#f59e0b','#ef4444','#f97316'];
+  const particles = [];
+  const count = 150;
+
+  for (let i = 0; i < count; i++) {
+    particles.push({
+      x: Math.random() * canvas.width,
+      y: Math.random() * canvas.height - canvas.height,
+      w: Math.random() * 10 + 5,
+      h: Math.random() * 6 + 3,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      vx: (Math.random() - 0.5) * 4,
+      vy: Math.random() * 3 + 2,
+      rotation: Math.random() * 360,
+      rotSpeed: (Math.random() - 0.5) * 10,
+      opacity: 1
+    });
+  }
+
+  let frame = 0;
+  const maxFrames = 180;
+
+  function animate() {
+    frame++;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    particles.forEach(p => {
+      p.x += p.vx;
+      p.vy += 0.05;
+      p.y += p.vy;
+      p.rotation += p.rotSpeed;
+      if (frame > maxFrames - 40) {
+        p.opacity = Math.max(0, p.opacity - 0.025);
+      }
+
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.rotation * Math.PI / 180);
+      ctx.globalAlpha = p.opacity;
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    });
+
+    if (frame < maxFrames) {
+      requestAnimationFrame(animate);
+    } else {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
+  }
+  animate();
+}
+
+// Handle resize for confetti
+window.addEventListener('resize', () => {
+  const canvas = document.getElementById('confetti');
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+});
+
+// Add shake keyframes dynamically
+const styleSheet = document.createElement('style');
+styleSheet.textContent = '@keyframes shake{0%,100%{transform:translateX(0)}20%{transform:translateX(-8px)}40%{transform:translateX(8px)}60%{transform:translateX(-6px)}80%{transform:translateX(6px)}}';
+document.head.appendChild(styleSheet);
+</script>
+</body>
+</html>
